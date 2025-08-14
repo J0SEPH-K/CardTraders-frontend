@@ -7,7 +7,7 @@
     "noEmit": true,
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
-    "types": ["react", "react-native", "expo"],
+    "types": ["nativewind/types", "react", "react-native", "expo"],
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
   },
