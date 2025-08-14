@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ESNext",
+    "jsx": "react-native",
+    "strict": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "types": ["react", "react-native", "expo"],
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "extends": "expo/tsconfig.base"
+}
