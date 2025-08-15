@@ -1,8 +1,18 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "types": ["nativewind/types", "react", "react-native", "expo"],
+    "target": "ES2017",
+    "module": "ESNext",
+    "jsx": "react-native",
+    "strict": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["src/*"] },
+    "types": ["nativewind/types", "react", "react-native", "expo"],
+    "skipLibCheck": true
   },
-  "extends": "expo/tsconfig.base"
+  "include": ["App.tsx", "src/**/*"],
+  "exclude": ["cardtraders/**", "node_modules", "dist"]
 }
