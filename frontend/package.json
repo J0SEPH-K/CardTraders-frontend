@@ -4,10 +4,13 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
+    "dev": "expo start --tunnel",
+    "dev:local": "expo start",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --watch --noEmit"
   },
   "dependencies": {
     "@react-navigation/native": "^7.1.17",
