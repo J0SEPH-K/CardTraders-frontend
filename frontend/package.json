@@ -29,7 +29,8 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "tailwindcss": "3.3.2",
-    "zustand": "^5.0.7"
+    "zustand": "^5.0.7",
+    "@expo/vector-icons": "^14.0.0"
   },
     "overrides": {
     "nativewind": "2.0.11",

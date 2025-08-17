@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
-import CardListItem from "../../components/CardListItem";
+import AnalyticsCardListItem from "../../components/AnalyticsCardListItem";
 import SearchBar from "../../components/SearchBar";
 
 const CATEGORIES = [
@@ -10,72 +10,66 @@ const CATEGORIES = [
 	{ key: "sports", label: "스포츠" },
 ];
 
-const cards = [
+const analyticsItems = [
 	{
-		id: "1",
-		imageUrl: "https://placehold.co/100x80",
+		id: "a1",
+		imageUrl: "https://placehold.co/100x130",
 		title: "블랙 로터스",
-		description: "매직 더 개더링의 전설적인 카드입니다.",
-		price: 1000000,
+		data: Array.from({ length: 30 }, (_, i) => 1000 + Math.round(Math.sin(i / 3) * 50 + i * 2)),
 		category: "yugioh",
 	},
 	{
-		id: "2",
-		imageUrl: "https://placehold.co/100x80",
-		title: "피카츄 GX",
-		description: "포켓몬 카드, 한정판.",
-		price: 350000,
+		id: "a2",
+		imageUrl: "https://placehold.co/100x130",
+		title: "청룡의 기사",
+		data: Array.from({ length: 30 }, (_, i) => 800 + Math.round(Math.cos(i / 4) * 30 + i)),
+		category: "yugioh",
+	},
+	{
+		id: "a3",
+		imageUrl: "https://placehold.co/100x130",
+		title: "피카츄 - 시장 동향",
+		data: Array.from({ length: 30 }, (_, i) => 600 + Math.round(Math.sin(i / 5) * 20 + i * 0.5)),
 		category: "pokemon",
 	},
 	{
-		id: "3",
-		imageUrl: "https://placehold.co/100x80",
-		title: "레드 아이즈 블랙 드래곤",
-		description: "유희왕 인기 카드, 상태 양호.",
-		price: 180000,
-		category: "yugioh",
-	},
-	{
-		id: "4",
-		imageUrl: "https://placehold.co/100x80",
-		title: "야구 카드 레전드",
-		description: "스포츠 카드, 소장가치 높음.",
-		price: 500000,
+		id: "a4",
+		imageUrl: "https://placehold.co/100x130",
+		title: "야구 카드 - 시장 동향",
+		data: Array.from({ length: 30 }, (_, i) => 1200 + Math.round(Math.cos(i / 6) * 40 - i)),
 		category: "sports",
 	},
 	{
-		id: "5",
-		imageUrl: "https://placehold.co/100x80",
+		id: "a5",
+		imageUrl: "https://placehold.co/100x130",
 		title: "다크 매지션",
-		description: "유희왕 대표 카드, 소장용 추천.",
-		price: 220000,
+		data: Array.from({ length: 30 }, (_, i) => 420 + Math.round(Math.sin(i / 2) * 25 + i)),
 		category: "yugioh",
 	},
 ];
 
-export default function BuyerPage() {
+export default function AnalyticsPage() {
 	const [query, setQuery] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
 	const handleSearch = () => {
-		// Search runs from query state; no additional action required here.
-		// Kept for SearchBar onSearch prop compatibility.
+		// kept for SearchBar onSearch compatibility
 	};
 
 	const toggleCategory = (key: string) => {
 		setSelectedCategory((prev) => (prev === key ? "all" : key));
 	};
 
-	const displayed = cards.filter((c) => {
-		const matchesCategory = selectedCategory === "all" || c.category === selectedCategory;
+	const displayed = analyticsItems.filter((it) => {
+		const matchesCategory = selectedCategory === "all" || it.category === selectedCategory;
 		const q = query.trim().toLowerCase();
-		const matchesQuery = q === "" || c.title.toLowerCase().includes(q);
+		const matchesQuery = q === "" || it.title.toLowerCase().includes(q);
 		return matchesCategory && matchesQuery;
 	});
 
 	return (
 		<View style={styles.container}>
-			<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="카드 검색" />
+			<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="Search analytics" />
 
 			<View style={styles.filterRow}>
 				{CATEGORIES.map((cat) => {
@@ -96,7 +90,7 @@ export default function BuyerPage() {
 				data={displayed}
 				keyExtractor={(item) => item.id}
 				renderItem={({ item }) => (
-					<CardListItem imageUrl={item.imageUrl} title={item.title} description={item.description} price={item.price} />
+					<AnalyticsCardListItem imageUrl={item.imageUrl} title={item.title} data={item.data} graphWidth={160} graphHeight={100} />
 				)}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}

@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 
 type Props = {
@@ -30,43 +31,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderRadius: 16,
     backgroundColor: "#fff",
+    // shadow for iOS (all around) and Android (elevation)
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 }, // center shadow so it drops evenly on all sides
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
     padding: 12,
-    marginVertical: 6,
+    marginVertical: 8,
+    marginHorizontal: 16, // side margins so items don't touch screen edges
     alignItems: "center",
+    overflow: "visible", // ensure shadow is visible outside rounded corners
   },
   imageWrapper: {
-    flex: 3,
+    width: 100,
+    height: 130,
     marginRight: 12,
     borderRadius: 12,
     overflow: "hidden",
-    height: 80,
+    backgroundColor: "#f3f3f3",
   },
   image: {
     width: "100%",
     height: "100%",
   },
   textWrapper: {
-    flex: 7,
+    flex: 1,
     justifyContent: "space-between",
-    height: 80,
+    height: 120,
   },
   title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 6,
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "left",
+    paddingLeft: 10,
   },
   priceWrapper: {
     alignItems: "flex-end",
     justifyContent: "flex-end",
-    flex: 1,
+    paddingRight: 8,
   },
   price: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "700",
     color: "#007AFF",
   },
 });
