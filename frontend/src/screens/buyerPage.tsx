@@ -54,7 +54,7 @@ const cards = [
 ];
 
 type Props = {
-	setSelectedCard: (card: any) => void;
+	setSelectedCard?: (card: any) => void;
 };
 
 export default function BuyerPage({ setSelectedCard }: Props) {
@@ -105,7 +105,7 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 							title={item.title}
 							description={item.description}
 							price={item.price}
-							onPress={() => setSelectedCard(item)}
+							onPress={() => setSelectedCard?.(item)}
 						/>
 					)}
 				showsVerticalScrollIndicator={false}
