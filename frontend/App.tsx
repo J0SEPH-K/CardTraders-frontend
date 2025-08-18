@@ -1,6 +1,6 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import Home from './src/screens/Home';
+import Home from './src/screens/home';
 //import SellerPage from './src/screens/sellerPage';
 import BuyerPage from './src/screens/buyerPage';
 // import ProfilePage from './src/screens/profilePage'; // if exists

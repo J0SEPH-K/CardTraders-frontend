@@ -1,16 +1,17 @@
 import React from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet, Pressable } from "react-native";
 
 type Props = {
   imageUrl: string;
   title: string;
   description: string;
   price: number;
+  onPress?: () => void;
 };
 
-export default function CardListItem({ imageUrl, title, price }: Props) {
+export default function CardListItem({ imageUrl, title, description, price, onPress }: Props) {
   return (
-    <View style={styles.container}>
+    <Pressable style={styles.container} onPress={onPress}>
       <View style={styles.imageWrapper}>
         <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
       </View>
@@ -22,7 +23,7 @@ export default function CardListItem({ imageUrl, title, price }: Props) {
           <Text style={styles.price}>{`₩${price.toLocaleString()}`}</Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
-import AnalyticsCardListItem from "../../components/AnalyticsCardListItem";
-import SearchBar from "../../components/SearchBar";
+import AnalyticsCardListItem from "../components/AnalyticsCardListItem";
+import SearchBar from "../components/SearchBar";
 
 const CATEGORIES = [
 	{ key: "all", label: "전체" },

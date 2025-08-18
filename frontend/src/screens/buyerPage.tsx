@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
-import CardListItem from "../../components/CardListItem";
-import SearchBar from "../../components/SearchBar";
+import CardListItem from "../components/CardListItem";
+import SearchBar from "../components/SearchBar";
 
 const CATEGORIES = [
 	{ key: "all", label: "전체" },
@@ -53,7 +53,11 @@ const cards = [
 	},
 ];
 
-export default function BuyerPage() {
+type Props = {
+	setSelectedCard: (card: any) => void;
+};
+
+export default function BuyerPage({ setSelectedCard }: Props) {
 	const [query, setQuery] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -95,9 +99,15 @@ export default function BuyerPage() {
 			<FlatList
 				data={displayed}
 				keyExtractor={(item) => item.id}
-				renderItem={({ item }) => (
-					<CardListItem imageUrl={item.imageUrl} title={item.title} description={item.description} price={item.price} />
-				)}
+					renderItem={({ item }) => (
+						<CardListItem
+							imageUrl={item.imageUrl}
+							title={item.title}
+							description={item.description}
+							price={item.price}
+							onPress={() => setSelectedCard(item)}
+						/>
+					)}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}
 			/>

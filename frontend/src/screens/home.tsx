@@ -11,16 +11,17 @@ import {
   PanResponder,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import Icon from "../../components/Icon";
-import BuyerPage from "../buyerPage";
-import SellerPage from "../sellerPage";
-import AnalyticsPage from "../analytics"; // added import
+import Icon from "../components/Icon";
+import BuyerPage from "./buyerPage";
+import SellerPage from "./sellerPage";
+import AnalyticsPage from "./analytics"; // added import
 import Svg, { Path } from "react-native-svg";
+import CardDetailModal from "../components/CardDetailModal";
 
-const Logo = require("../../assets/CardTradersLogo_Original.png");
+const Logo = require("../assets/CardTradersLogo_Original.png");
 
 const TAB_ICONS = [
-  { key: "판매", iconName: "credit-card" },
+  { key: "판매", iconName: "plus" }, // changed to addition icon
   { key: "구매", logo: Logo },
   { key: "분석", iconName: "chart-line" }, // changed to analytics/chart icon
 ];
@@ -59,7 +60,8 @@ export default function Home() {
   const selectedIndexAnim = useRef(new Animated.Value(initialIndex)).current; // index (0,1,2)
 
   const [selectedIndex, setSelectedIndex] = useState<number>(initialIndex);
-
+  const [selectedCard, setSelectedCard] = useState(null);
+  
   // gesture helpers
   const gestureStartIndexRef = useRef<number>(initialIndex);
   const isDraggingRef = useRef<boolean>(false);
@@ -187,7 +189,7 @@ export default function Home() {
           }}
         >
           <View style={{ width: windowWidth, flex: 1 }}>{/* 0 */}<SellerPage /></View>
-          <View style={{ width: windowWidth, flex: 1 }}>{/* 1 */}<BuyerPage /></View>
+          <View style={{ width: windowWidth, flex: 1 }}>{/* 1 */}<BuyerPage setSelectedCard={setSelectedCard} /></View>
           <View style={{ width: windowWidth, flex: 1 }}>{/* 2 */}<AnalyticsPage /></View>
         </Animated.View>
       </View>
@@ -329,6 +331,12 @@ export default function Home() {
           );
         })}
       </View>
+
+      <CardDetailModal
+        visible={!!selectedCard}
+        card={selectedCard}
+        onClose={() => setSelectedCard(null)}
+      />
     </SafeAreaView>
   );
 }
