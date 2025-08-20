@@ -2572,6 +2572,13 @@ expo-asset@~11.1.7:
     "@expo/image-utils" "^0.7.6"
     expo-constants "~17.1.7"
 
+expo-camera@~15.0.14:
+  version "15.0.16"
+  resolved "https://registry.npmjs.org/expo-camera/-/expo-camera-15.0.16.tgz"
+  integrity sha512-FLE02DMqkjwsb7IugKAqQvBe6s+TCQeb5LupO1+r//wAhBwmHncOrc6zV95ZEC2f9PTPK34nFH/s8CDGiVzIAA==
+  dependencies:
+    invariant "^2.2.4"
+
 expo-constants@~17.1.7:
   version "17.1.7"
   resolved "https://registry.npmjs.org/expo-constants/-/expo-constants-17.1.7.tgz"
