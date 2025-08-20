@@ -2,56 +2,7 @@ import React, { useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
 import CardListItem from "../components/CardListItem";
 import SearchBar from "../components/SearchBar";
-
-const CATEGORIES = [
-	{ key: "all", label: "전체" },
-	{ key: "pokemon", label: "포켓몬" },
-	{ key: "yugioh", label: "유희왕" },
-	{ key: "sports", label: "스포츠" },
-];
-
-const cards = [
-	{
-		id: "1",
-		imageUrl: "https://placehold.co/100x80",
-		title: "블랙 로터스",
-		description: "매직 더 개더링의 전설적인 카드입니다.",
-		price: 1000000,
-		category: "yugioh",
-	},
-	{
-		id: "2",
-		imageUrl: "https://placehold.co/100x80",
-		title: "피카츄 GX",
-		description: "포켓몬 카드, 한정판.",
-		price: 350000,
-		category: "pokemon",
-	},
-	{
-		id: "3",
-		imageUrl: "https://placehold.co/100x80",
-		title: "레드 아이즈 블랙 드래곤",
-		description: "유희왕 인기 카드, 상태 양호.",
-		price: 180000,
-		category: "yugioh",
-	},
-	{
-		id: "4",
-		imageUrl: "https://placehold.co/100x80",
-		title: "야구 카드 레전드",
-		description: "스포츠 카드, 소장가치 높음.",
-		price: 500000,
-		category: "sports",
-	},
-	{
-		id: "5",
-		imageUrl: "https://placehold.co/100x80",
-		title: "다크 매지션",
-		description: "유희왕 대표 카드, 소장용 추천.",
-		price: 220000,
-		category: "yugioh",
-	},
-];
+import { CATEGORIES, cards } from "../data/dummy";
 
 type Props = {
 	setSelectedCard?: (card: any) => void;
