@@ -1,23 +1,86 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, Image, StyleSheet, Pressable, ScrollView } from "react-native";
-import type { CardItem } from "../data/dummy";
+import { useNavigation } from "@react-navigation/native";
+type AnyCard = {
+  id?: string | number;
+  imageUrl?: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  category?: string;
+  uploadDate?: string;
+  createdAt?: string;
+  card_name?: string;
+  rarity?: string;
+  language?: string;
+  set?: string;
+  card_num?: string | number;
+  sports?: any;
+  pokemon?: any;
+  yugioh?: any;
+  uploadedBy?: number | string;
+} | null;
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  card: CardItem | null;
+  card: AnyCard;
+  showUploadDate?: boolean; // when true, display upload date below the price
+  onMessageSeller?: (sellerId: number | string | undefined, cardId?: number | string) => void;
 };
 
-export default function CardDetailModal({ visible, onClose, card }: Props) {
+export default function CardDetailModal({ visible, onClose, card, showUploadDate = true, onMessageSeller }: Props) {
   // Cache the last non-null card to keep content stable during fade-out
-  const [lastCard, setLastCard] = useState<CardItem | null>(card ?? null);
+  const [lastCard, setLastCard] = useState<AnyCard>(card ?? null);
   const scrollRef = useRef<ScrollView | null>(null);
+  const navigation = useNavigation<any>();
 
   useEffect(() => {
     if (card) setLastCard(card);
   }, [card]);
 
   const displayedCard = card ?? lastCard;
+
+  // format date in universal YYYY/MM/DD format regardless of locale
+  const formatYMD = (dateLike: string | number | Date | undefined | null): string | null => {
+    if (!dateLike) return null;
+    try {
+      const d = new Date(dateLike);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}/${m}/${day}`;
+      }
+      if (typeof dateLike === "string") {
+        const m = dateLike.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (m) {
+          const [, y, mo, da] = m;
+          return `${y}/${mo.padStart(2, "0")}/${da.padStart(2, "0")}`;
+        }
+      }
+    } catch {
+      // noop, fall through
+    }
+    return null;
+  };
+
+  // Precompute formatted upload date (use uploadDate or createdAt from DB)
+  const formattedUploadDate = formatYMD(displayedCard?.uploadDate || displayedCard?.createdAt);
+
+  const handleMessageSeller = () => {
+    const sellerId = displayedCard?.uploadedBy as number | string | undefined;
+    const cardId = displayedCard?.id as number | string | undefined;
+    if (onMessageSeller) {
+      onMessageSeller(sellerId, cardId);
+      return;
+    }
+    try {
+      navigation.navigate("Chat", { sellerId, cardId });
+    } catch {
+      // no-op if route missing; parent can pass onMessageSeller to handle
+    }
+  };
 
   // Always show top when opening or switching cards
   useEffect(() => {
@@ -69,10 +132,32 @@ export default function CardDetailModal({ visible, onClose, card }: Props) {
           >
             {displayedCard ? (
               <>
-                <Image source={{ uri: displayedCard.imageUrl }} style={styles.image} resizeMode="cover" />
+                {(() => {
+                  const uri = displayedCard.imageUrl || "https://placehold.co/1000x600";
+                  const hasSeller = displayedCard.uploadedBy !== undefined && displayedCard.uploadedBy !== null && displayedCard.uploadedBy !== "";
+                  return (
+                    <View style={styles.imageWrap}>
+                      <Image source={{ uri }} style={styles.image} resizeMode="cover" />
+                      <Pressable
+                        onPress={handleMessageSeller}
+                        disabled={!hasSeller}
+                        style={[styles.messageButton, !hasSeller && styles.messageButtonDisabled]}
+                        accessibilityRole="button"
+                        accessibilityLabel="message seller"
+                      >
+                        <Text style={styles.messageButtonText}>Message Seller</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })()}
                 <View style={styles.body}>
-                  <Text style={styles.title}>{displayedCard.title}</Text>
-                  <Text style={styles.price}>{`₩${displayedCard.price.toLocaleString()}`}</Text>
+                  <Text style={styles.title}>{displayedCard.title || displayedCard.card_name || "카드"}</Text>
+                  {typeof displayedCard.price === 'number' ? (
+                    <Text style={styles.price}>{`₩${Math.round(displayedCard.price).toLocaleString()}`}</Text>
+                  ) : null}
+                  {showUploadDate && formattedUploadDate ? (
+                    <Text style={styles.uploadDateText}>{`업로드 날짜: ${formattedUploadDate}`}</Text>
+                  ) : null}
                   {displayedCard.description ? (
                     <Text style={styles.description}>{displayedCard.description}</Text>
                   ) : null}
@@ -118,10 +203,11 @@ export default function CardDetailModal({ visible, onClose, card }: Props) {
                     </View>
                   ) : null}
 
-                  {/* Pokemon metadata if available */}
+                  {/* Pokemon metadata if available (nested) */}
                   {displayedCard.category === "pokemon" && displayedCard.pokemon ? (
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>포켓몬 카드 정보</Text>
+                      <Row label="카드 ID" value={displayedCard.pokemon.cardId} />
                       <Row label="상태" value={displayedCard.pokemon.condition} />
                       <Row label="게임" value={displayedCard.pokemon.game} />
                       <Row label="카드 이름" value={displayedCard.pokemon.cardName} />
@@ -137,11 +223,30 @@ export default function CardDetailModal({ visible, onClose, card }: Props) {
                       <Row label="희귀도" value={displayedCard.pokemon.rarity} />
                       <Row label="마감" value={displayedCard.pokemon.finish} />
                       <Row label="제작 연도" value={displayedCard.pokemon.yearManufactured} />
-                      <Row label="카드 번호" value={displayedCard.pokemon.cardNumber} />
+                      <Row label="카드번호" value={displayedCard.pokemon.cardNumber} />
+                      <Row label="언어" value={displayedCard.pokemon.language} />
+                      <Row
+                        label="변형"
+                        value={Array.isArray(displayedCard.pokemon.variants)
+                          ? displayedCard.pokemon.variants.join(", ")
+                          : displayedCard.pokemon.variants}
+                      />
+                      <Row label="그레이딩" value={displayedCard.pokemon.grading} />
                     </View>
                   ) : null}
 
-                  {/* Yugioh metadata if available */}
+                  {/* Pokemon metadata (uploadedCards top-level fallback) */}
+                  {displayedCard.category === "pokemon" && !displayedCard.pokemon ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>포켓몬 카드 정보</Text>
+                      <Row label="세트" value={displayedCard.set} />
+                      <Row label="카드번호" value={displayedCard.card_num} />
+                      <Row label="희귀도" value={displayedCard.rarity} />
+                      <Row label="언어" value={displayedCard.language} />
+                    </View>
+                  ) : null}
+
+                  {/* Yugioh metadata if available (nested) */}
                   {displayedCard.category === "yugioh" && displayedCard.yugioh ? (
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>유희왕 카드 정보</Text>
@@ -163,6 +268,17 @@ export default function CardDetailModal({ visible, onClose, card }: Props) {
                       <Row label="카드 번호" value={displayedCard.yugioh.cardNumber} />
                       <Row label="제조 국가/지역" value={displayedCard.yugioh.countryOfManufacture} />
                       <Row label="마감" value={displayedCard.yugioh.finish} />
+                    </View>
+                  ) : null}
+                  {/* Yugioh metadata (uploadedCards top-level fallback) */}
+                  {displayedCard.category === "yugioh" && !displayedCard.yugioh ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>유희왕 카드 정보</Text>
+                      <Row label="카드 이름" value={displayedCard.card_name} />
+                      <Row label="세트" value={displayedCard.set} />
+                      <Row label="카드 번호" value={displayedCard.card_num} />
+                      <Row label="희귀도" value={displayedCard.rarity} />
+                      <Row label="언어" value={displayedCard.language} />
                     </View>
                   ) : null}
                 </View>
@@ -222,6 +338,32 @@ const styles = StyleSheet.create({
   height: 600,
     backgroundColor: "#f3f3f3",
   },
+  imageWrap: {
+    position: "relative",
+  },
+  messageButton: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  messageButtonDisabled: {
+    opacity: 0.5,
+  },
+  messageButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
   body: {
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -266,6 +408,11 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 16,
     color: "#444",
+  },
+  uploadDateText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
   },
   // removed bottom close button
 });

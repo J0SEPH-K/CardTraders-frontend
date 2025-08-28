@@ -35,7 +35,10 @@
     "extra": {
       "eas": {
         "projectId": "008c9baa-a70c-49c9-b258-6725871fae05"
-      }
+      },
+      "EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID": "338240292272-8tarpuvn34qrvolejqk8jcvundbkrlfs.apps.googleusercontent.com",
+      "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "338240292272-b6vpnq77d6bvtatpmm1n0ul2v92s652f.apps.googleusercontent.com",
+      "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "338240292272-5av3h43upt1heu93npfn8a2dc422hjdl.apps.googleusercontent.com"
     },
     "owner": "jungjunkim"
   }

@@ -9,7 +9,9 @@ import {
   Text,
   Image,
   PanResponder,
+  Platform,
 } from "react-native";
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import BuyerPage from "./buyerPage";
@@ -17,6 +19,15 @@ import SellerPage from "./sellerPage";
 import AnalyticsPage from "./analytics"; // added import
 import Svg, { Path } from "react-native-svg";
 import CardDetailModal from "../components/CardDetailModal";
+type BuyerCard = {
+  id: string | number;
+  imageUrl?: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  category?: string;
+  uploadDate?: string;
+};
 
 const Logo = require("../assets/CardTradersLogo_Original.png");
 
@@ -37,6 +48,7 @@ const TAB_BORDER_COLOR = "#f93414";
 const TAB_BACKGROUND = "#fff";
 
 export default function Home() {
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const windowWidth = Dimensions.get("window").width;
   const initialIndex = 1; // "구매" by default
@@ -60,7 +72,8 @@ export default function Home() {
   const selectedIndexAnim = useRef(new Animated.Value(initialIndex)).current; // index (0,1,2)
 
   const [selectedIndex, setSelectedIndex] = useState<number>(initialIndex);
-  const [selectedCard, setSelectedCard] = useState(null);
+  const [selectedCard, setSelectedCard] = useState<BuyerCard | null>(null);
+  const [sellerPreviewCard, setSellerPreviewCard] = useState<BuyerCard | null>(null);
   
   // gesture helpers
   const gestureStartIndexRef = useRef<number>(initialIndex);
@@ -169,12 +182,19 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.content}>
-        {/* added header */}
+        {/* header with title and profile button */}
         <View style={{ paddingHorizontal: 24, paddingTop: 12 }}>
-          <Text style={{ fontSize: 28, fontWeight: "700" }}>CardTraders</Text>
-          <Text style={{ fontSize: 14, marginTop: 8, color: "#6b7280" }}>
-            쉽고 안전한 카드 거래
-          </Text>
+          <View style={styles.headerRow}>
+            <Text style={{ fontSize: 30, fontFamily: 'Urbanist_500Medium', letterSpacing: 1 }}>CART</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="프로필로 이동"
+              onPress={() => navigation.navigate('Profile')}
+              style={styles.profileButton}
+            >
+              <Icon name="user-circle" size={26} color="#111827" />
+            </Pressable>
+          </View>
         </View>
 
         {/* content area: pages laid out horizontally and translated to create slide */}
@@ -188,7 +208,9 @@ export default function Home() {
             transform: [{ translateX: contentTranslate }],
           }}
         >
-          <View style={{ width: windowWidth, flex: 1 }}>{/* 0 */}<SellerPage /></View>
+          <View style={{ width: windowWidth, flex: 1 }}>{/* 0 */}
+            <SellerPage openCardPreview={setSellerPreviewCard} />
+          </View>
           <View style={{ width: windowWidth, flex: 1 }}>{/* 1 */}<BuyerPage setSelectedCard={setSelectedCard} /></View>
           <View style={{ width: windowWidth, flex: 1 }}>{/* 2 */}<AnalyticsPage /></View>
         </Animated.View>
@@ -332,10 +354,19 @@ export default function Home() {
         })}
       </View>
 
+      {/* Buyer card detail modal (shows upload date) */}
       <CardDetailModal
         visible={!!selectedCard}
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
+        showUploadDate
+      />
+
+  {/* Seller preview modal hoisted to root; no upload date shown here */}
+      <CardDetailModal
+        visible={!!sellerPreviewCard}
+        card={sellerPreviewCard}
+        onClose={() => setSellerPreviewCard(null)}
       />
     </SafeAreaView>
   );
@@ -358,5 +389,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 3,
     overflow: "hidden",
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
   },
 });

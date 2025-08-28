@@ -45,6 +45,10 @@ export interface PokemonCardInfo {
   finish?: string; // 마감(피니시)
   yearManufactured?: number; // 제작 연도
   cardNumber?: string | number; // 카드 번호
+  language?: string; // 언어
+  variants?: string | string[]; // 변형(Variants)
+  cardId?: string; // 카드 ID (e.g., TCGdex id)
+  grading?: string; // 그레이딩 (미입력시 빈 값)
 }
 
 // Yu-Gi-Oh card specific metadata
@@ -72,6 +76,8 @@ export type CardItem = {
   price: number;
   category: "pokemon" | "yugioh" | "sports";
   data: number[];
+  // ISO datetime string recording when the card was uploaded
+  uploadDate?: string;
   sports?: SportsCardInfo; // present for sports category items
   pokemon?: PokemonCardInfo; // present for pokemon category items
   yugioh?: YugiohCardInfo; // present for yugioh category items
@@ -92,6 +98,7 @@ export const cards: CardItem[] = [
     description: "매직 더 개더링의 전설적인 카드입니다.",
     price: 1000000,
     category: "yugioh",
+  uploadDate: "2025-08-18T10:15:00.000Z",
     data: Array.from({ length: 30 }, (_, i) => 1000 + Math.round(Math.sin(i / 3) * 50 + i * 2)),
     yugioh: {
       condition: "Lightly Played",
@@ -116,6 +123,7 @@ export const cards: CardItem[] = [
     description: "포켓몬 카드, 한정판.",
     price: 350000,
     category: "pokemon",
+  uploadDate: "2025-08-19T14:30:00.000Z",
     data: Array.from({ length: 30 }, (_, i) => 600 + Math.round(Math.sin(i / 5) * 20 + i * 0.5)),
     pokemon: {
       condition: "Near Mint",
@@ -128,7 +136,12 @@ export const cards: CardItem[] = [
       rarity: "Ultra Rare",
       finish: "Holofoil",
       yearManufactured: 2017,
-      cardNumber: "SM-P",
+  cardNumber: "SM-P",
+  // New fields to mirror Seller preview mapping
+  language: "en",
+  variants: ["holo", "reverseHolo"],
+  cardId: "sm-promos-SM-P",
+  // grading left blank intentionally for now
     },
   },
   {
@@ -138,6 +151,7 @@ export const cards: CardItem[] = [
     description: "유희왕 인기 카드, 상태 양호.",
     price: 180000,
     category: "yugioh",
+  uploadDate: "2025-08-19T22:05:00.000Z",
     data: Array.from({ length: 30 }, (_, i) => 800 + Math.round(Math.cos(i / 4) * 30 + i)),
     yugioh: {
       condition: "Near Mint",
@@ -162,6 +176,7 @@ export const cards: CardItem[] = [
     description: "스포츠 카드, 소장가치 높음.",
     price: 500000,
     category: "sports",
+  uploadDate: "2025-08-20T08:45:00.000Z",
     data: Array.from({ length: 30 }, (_, i) => 1200 + Math.round(Math.cos(i / 6) * 40 - i)),
     sports: {
       autographedBy: "홍길동",
@@ -198,6 +213,7 @@ export const cards: CardItem[] = [
     description: "유희왕 대표 카드, 소장용 추천.",
     price: 220000,
     category: "yugioh",
+  uploadDate: "2025-08-20T18:20:00.000Z",
     data: Array.from({ length: 30 }, (_, i) => 420 + Math.round(Math.sin(i / 2) * 25 + i)),
     yugioh: {
       condition: "Excellent",

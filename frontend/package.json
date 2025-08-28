@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "expo start --tunnel",
+    "dev:lan": "expo start --lan",
     "dev:local": "expo start",
+    "set:ngrok": "node ./scripts/set-ngrok-api.js",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
@@ -13,14 +15,28 @@
     "typecheck:watch": "tsc --watch --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/boldonse": "^0.4.0",
+    "@expo-google-fonts/cinzel": "^0.4.1",
+    "@expo-google-fonts/do-hyeon": "^0.4.0",
+    "@expo-google-fonts/gothic-a1": "0.4.0",
+    "@expo-google-fonts/hahmlet": "^0.4.0",
+    "@expo-google-fonts/lobster-two": "^0.4.0",
+    "@expo-google-fonts/merriweather": "^0.4.1",
+    "@expo-google-fonts/urbanist": "^0.4.1",
+    "@expo/vector-icons": "^14.0.0",
     "@react-navigation/native": "^7.1.17",
     "@react-navigation/native-stack": "^7.3.25",
     "@tanstack/react-query": "^5.85.0",
-  "expo": "~53.0.20",
-  "expo-camera": "~15.0.14",
-    "expo-status-bar": "~2.2.3",
-    "lottie-ios": "^4.5.1",
-    "lottie-react-native": "7.2.2",
+    "expo": "~53.0.20",
+    "expo-camera": "~15.0.14",
+    "expo-file-system": "17.0.1",
+    "expo-font": "^12.0.0",
+    "expo-image-manipulator": "13.1.7",
+    "expo-splash-screen": "~0.27.5",
+  "expo-status-bar": "~2.2.3",
+  "lottie-ios": "^4.5.1",
+  "expo-auth-session": "~5.5.2",
+  "expo-web-browser": "~13.0.3",
     "nativewind": "2.0.11",
     "react": "19.0.0",
     "react-native": "0.79.5",
@@ -30,10 +46,9 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "tailwindcss": "3.3.2",
-    "zustand": "^5.0.7",
-    "@expo/vector-icons": "^14.0.0"
+    "zustand": "^5.0.7"
   },
-    "overrides": {
+  "overrides": {
     "nativewind": "2.0.11",
     "tailwindcss": "3.3.2"
   },
@@ -42,6 +57,7 @@
     "@types/expo": "^32.0.13",
     "@types/react": "~19.0.10",
     "@types/react-native": "^0.72.8",
+    "expo-module-scripts": "4.1.10",
     "typescript": "~5.8.3"
   }
 }

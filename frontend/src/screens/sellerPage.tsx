@@ -13,18 +13,25 @@ import {
   Alert,
   ScrollView,
   Animated,
+  StatusBar,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { API_BASE, api } from "../api/client";
-import CardDetailModal from "../components/CardDetailModal";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { API_BASE, api, createUploadedCard } from "../api/client";
+import SellerCardListItem from "../components/SellerCardListItem";
+import { useAuth } from "@/store/useAuth";
+import { searchTcgDexCards, getTcgDexCard, type TcgDexCardBrief, type TcgDexCard } from "../api/tcgdex";
 import type { CardItem } from "../data/dummy";
 
 type Step =
   | "management"
   | "camera"
   | "confirm-photo"
-  | "title-input"
-  | "form"
+  | "pokemon-search"
+  | "description-input"
+  | "title-input" // legacy, kept for non-pokemon flows if needed
+  | "form" // legacy pokemon form, no longer used in new pokemon flow
   | "price-input"
   | "preview"
   | "submitting"
@@ -57,7 +64,13 @@ type PokemonCatalog = {
   sets_flat: string[];
 };
 
-export default function SellerPage() {
+type Props = {
+  openCardPreview?: (card: CardItem | null) => void;
+};
+
+export default function SellerPage({ openCardPreview }: Props) {
+  const user = useAuth((s)=>s.user);
+  const insets = useSafeAreaInsets();
   // camera
   const cameraRef = useRef<CameraView | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -68,22 +81,11 @@ export default function SellerPage() {
   const [currentFormStep, setCurrentFormStep] = useState<FormStep>("category");
 
   // seller cards management
-  const [sellerCards, setSellerCards] = useState<SellerCard[]>([
-    {
-      id: "1",
-      title: "피카츄 V",
-      description: "좋은 상태의 피카츄 카드입니다",
-      category: "pokemon",
-      status: "listed"
-    },
-    {
-      id: "2", 
-      title: "리자몽 프로모",
-      description: "한정판 프로모 카드",
-      category: "pokemon",
-      status: "draft"
-    }
-  ]);
+  const [sellerCards, setSellerCards] = useState<any[]>([]);
+  const [loadingSellerCards, setLoadingSellerCards] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 10;
 
   // catalog
   const [catalog, setCatalog] = useState<PokemonCatalog | null>(null);
@@ -100,6 +102,36 @@ export default function SellerPage() {
   const [cardTitle, setCardTitle] = useState<string>("");
   const [price, setPrice] = useState<string>("");
 
+  // pokemon search state
+  const [pkSearchQuery, setPkSearchQuery] = useState("");
+  const [pkLoading, setPkLoading] = useState(false);
+  const [pkError, setPkError] = useState<string | null>(null);
+  const [pkResults, setPkResults] = useState<TcgDexCardBrief[]>([]);
+  const [pkSelected, setPkSelected] = useState<TcgDexCardBrief | null>(null);
+  const [pkSelectedFull, setPkSelectedFull] = useState<TcgDexCard | null>(null);
+  const [pkDetailLoading, setPkDetailLoading] = useState(false);
+  // track whether user is using API search or manual entry
+  const [entryMode, setEntryMode] = useState<"api" | "manual">("api");
+
+  // key helpers
+  const itemKey = (item: any, idx?: number) =>
+    String(
+      item?.id ??
+        `${item?.uploadedBy ?? ""}-${item?.uploadDate ?? item?.createdAt ?? ""}-${item?.card_num ?? ""}-${idx ?? ""}`
+    );
+  const uniqueByKey = (arr: any[]) => {
+    const seen = new Set<string>();
+    const out: any[] = [];
+    arr.forEach((it, i) => {
+      const k = itemKey(it, i);
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(it);
+      }
+    });
+    return out;
+  };
+
   // animation for form steps
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -110,8 +142,7 @@ export default function SellerPage() {
   const [pickerOptions, setPickerOptions] = useState<string[]>([]);
   const [pickerOnSelect, setPickerOnSelect] = useState<(value: string) => void>(() => () => {});
 
-  // preview modal uses existing CardDetailModal
-  const [previewVisible, setPreviewVisible] = useState(false);
+  // preview modal controlled by parent via openCardPreview
 
   const regionSets = useMemo(() => {
     if (!catalog || !region) return [] as string[];
@@ -167,7 +198,7 @@ export default function SellerPage() {
     const steps: FormStep[] = ["category", "region", "set", "rarity", "language", "description"];
     const changedIndex = steps.indexOf(changedStep);
     
-    // Reset all steps after the changed one
+    // Reset all steps after the changed one, but preserve description content
     for (let i = changedIndex + 1; i < steps.length; i++) {
       const stepToReset = steps[i];
       switch (stepToReset) {
@@ -184,21 +215,25 @@ export default function SellerPage() {
           setLanguage(null);
           break;
         case "description":
-          setDescription("");
+          // Don't reset description content - preserve user's input
           break;
       }
     }
     
-    // Set current step to the next incomplete step
-    const nextIncompleteStep = getNextIncompleteStep(changedStep);
-    if (nextIncompleteStep) {
-      setCurrentFormStep(nextIncompleteStep);
-      // Trigger fade animation for the new current step
-      Animated.sequence([
-        Animated.timing(fadeAnim, { duration: 150, toValue: 0, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { duration: 300, toValue: 1, useNativeDriver: true }),
-      ]).start();
+    // Always set current step to the step immediately after the changed step
+    const nextStepIndex = changedIndex + 1;
+    if (nextStepIndex < steps.length) {
+      setCurrentFormStep(steps[nextStepIndex]);
+    } else {
+      // If we're at the last step, stay there
+      setCurrentFormStep(changedStep);
     }
+    
+    // Trigger fade animation for the new current step
+    Animated.sequence([
+      Animated.timing(fadeAnim, { duration: 150, toValue: 0, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { duration: 300, toValue: 1, useNativeDriver: true }),
+    ]).start();
   };
 
   const getNextIncompleteStep = (fromStep: FormStep): FormStep | null => {
@@ -233,6 +268,62 @@ export default function SellerPage() {
     // Initialize fade animation
     fadeAnim.setValue(1);
   }, []);
+  // Load current user's uploaded cards for management list
+  const reloadSellerCards = async () => {
+    if (!user?.userId) return;
+    try {
+      setLoadingSellerCards(true);
+      setHasMore(true);
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: "0",
+        uploadedBy: String(user.userId),
+      });
+      const r = await fetch(`${API_BASE}/uploaded-cards?${params.toString()}`);
+      if (!r.ok) throw new Error(await r.text());
+      const first = (await r.json()) as any[];
+  setSellerCards(uniqueByKey(first || []));
+      setHasMore((first?.length || 0) === PAGE_SIZE);
+    } catch (e) {
+      setSellerCards([]);
+      setHasMore(false);
+    } finally {
+      setLoadingSellerCards(false);
+    }
+  };
+
+  const loadMoreSellerCards = async () => {
+    if (loadingMore || !hasMore || !user?.userId) return;
+    try {
+      setLoadingMore(true);
+      const offset = sellerCards.length;
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+        uploadedBy: String(user.userId),
+      });
+      const r = await fetch(`${API_BASE}/uploaded-cards?${params.toString()}`);
+      if (!r.ok) throw new Error(await r.text());
+  const next = (await r.json()) as any[];
+  setSellerCards((prev) => uniqueByKey([...(prev || []), ...(next || [])]));
+      setHasMore((next?.length || 0) === PAGE_SIZE);
+    } catch (e) {
+      // stop further loads on error to avoid loops
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    reloadSellerCards();
+  }, [user?.userId]);
+
+  // When returning to management step, refresh the list
+  useEffect(() => {
+    if (step === "management") reloadSellerCards();
+  }, [step]);
+
 
   useEffect(() => {
     if (!permission) return;
@@ -257,43 +348,135 @@ export default function SellerPage() {
         setLoadingCatalog(false);
       }
     };
+    // Keep catalog load for legacy form, but it's not required for new pokemon flow
     load();
   }, []);
 
   const cardForPreview: CardItem | null = useMemo(() => {
-    if (!photoUri || !setName || !rarity || !language || !cardTitle || !price) return null;
+    if (!photoUri || !price) return null;
+    // Prefer selected Pokemon card when available
+    const titleFromSelection = pkSelectedFull
+      ? pkSelectedFull.name
+      : pkSelected
+      ? pkSelected.name
+      : cardTitle;
+    if (!titleFromSelection) return null;
+    // For manual mode, require at least rarity or set or language to avoid empty metadata
+    if (!pkSelected && entryMode === "manual" && !rarity && !setName && !language) {
+      return null;
+    }
+    const pokemonInfo: any = {};
+    if (pkSelectedFull) {
+      if (pkSelectedFull.name) pokemonInfo.cardName = pkSelectedFull.name;
+      if (pkSelectedFull.localId) pokemonInfo.cardNumber = String(pkSelectedFull.localId);
+      if (pkSelectedFull.set?.name) pokemonInfo.set = pkSelectedFull.set.name;
+      if (pkSelectedFull.rarity) pokemonInfo.rarity = pkSelectedFull.rarity;
+  pokemonInfo.game = "Pokemon TCG";
+  // Language from selection or region fallback (ko for Korean sets, else en)
+  pokemonInfo.language = language || (region === "korean" ? "ko" : "en");
+      // New fields
+      if (pkSelectedFull.id) pokemonInfo.cardId = pkSelectedFull.id;
+      // Variants can be object of flags or string array; normalize to string list
+      if (Array.isArray(pkSelectedFull.variants)) {
+        pokemonInfo.variants = pkSelectedFull.variants as any;
+      } else if (pkSelectedFull.variants && typeof pkSelectedFull.variants === "object") {
+        const keys = Object.keys(pkSelectedFull.variants as Record<string, boolean>).filter(
+          (k) => (pkSelectedFull.variants as Record<string, boolean>)[k]
+        );
+        if (keys.length) pokemonInfo.variants = keys;
+      }
+    } else if (pkSelected) {
+      if (pkSelected.name) pokemonInfo.cardName = pkSelected.name;
+      if (pkSelected.localId) pokemonInfo.cardNumber = String(pkSelected.localId);
+      if (pkSelected.id) pokemonInfo.cardId = pkSelected.id;
+      if (pkSelected.set?.name) pokemonInfo.set = pkSelected.set.name;
+      if (pkSelected.rarity) pokemonInfo.rarity = pkSelected.rarity as any;
+      // Apply language from selection or region
+      pokemonInfo.language = language || (region === "korean" ? "ko" : "en");
+    } else {
+      if (rarity) pokemonInfo.rarity = rarity;
+      if (setName) pokemonInfo.set = setName;
+      if (language) pokemonInfo.language = language as any;
+    }
     return {
       id: "temp",
       imageUrl: photoUri,
-      title: cardTitle,
+      title: titleFromSelection,
       description,
       price: parseFloat(price) || 0,
       category: "pokemon",
       data: [],
-      pokemon: {
-        rarity,
-        set: setName,
-        language,
-      },
+      // Set upload date to now for preview; backend will assign actual on submit
+      uploadDate: new Date().toISOString(),
+      pokemon: pokemonInfo,
     } as CardItem;
-  }, [photoUri, setName, rarity, language, description, cardTitle, price]);
+  }, [photoUri, price, pkSelected, pkSelectedFull, cardTitle, description, rarity, setName, language]);
 
   const submit = async () => {
     setStep("submitting");
     try {
-      // For now, map to /listings API until uploadedCards endpoint exists
-      const payload = {
-        title: cardTitle || "Pokemon Card",
-        description,
+      // Build payload for uploadedCards
+      const payload: any = {
         category: "pokemon",
-        set_name: setName,
-        base: region || undefined,
-        card_type: "pokemon",
+        card_name: cardTitle || pkSelectedFull?.name || pkSelected?.name || "Pokemon Card",
+        rarity: pkSelectedFull?.rarity || rarity || undefined,
+        variants: (Array.isArray(pkSelectedFull?.variants)
+          ? pkSelectedFull?.variants
+          : pkSelectedFull?.variants && typeof pkSelectedFull?.variants === "object"
+            ? Object.keys(pkSelectedFull?.variants as any).filter(k => (pkSelectedFull?.variants as any)[k])
+            : undefined) || undefined,
+  language: language || (region === "korean" ? "ko" : "en"),
+        set: pkSelectedFull?.set?.name || setName || undefined,
+  // Use TCGdex global id for card_num (e.g., "swsh3-136")
+  card_num: pkSelectedFull?.id ?? pkSelected?.id ?? undefined,
         price: parseFloat(price) || 0,
+        description: description || undefined,
+        uploadDate: new Date().toISOString(),
+        uploadedBy: user?.userId || undefined,
       };
-      await api("/listings", { method: "POST", body: JSON.stringify(payload) });
-      setStep("done");
-      Alert.alert("업로드 완료", "카드 정보가 업로드되었습니다.");
+      // Attach image as base64 if available
+      if (photoUri) {
+        try {
+          // RN fetch to blob then to base64 isn't trivial without expo-file-system; use FileSystem if available
+          const toBase64 = async (uri: string) => {
+            try {
+              // Prefer expo-file-system when available in Expo apps
+              const FileSystem = require("expo-file-system");
+              const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+              return `data:image/jpeg;base64,${b64}`;
+            } catch {
+              return undefined;
+            }
+          };
+          const dataUrl = await toBase64(photoUri);
+          if (dataUrl) {
+            if (typeof __DEV__ !== "undefined" && __DEV__) {
+              // eslint-disable-next-line no-console
+              console.log("[submit] attaching image_base64", { length: dataUrl.length, head: dataUrl.slice(0, 32) });
+            }
+            payload.image_base64 = dataUrl;
+          } else if (typeof __DEV__ !== "undefined" && __DEV__) {
+            // eslint-disable-next-line no-console
+            console.log("[submit] no image_base64 (toBase64 returned undefined)");
+          }
+        } catch {}
+      }
+  await createUploadedCard(payload);
+      Alert.alert(
+        "업로드 완료",
+        "카드 정보가 업로드되었습니다.",
+        [
+          {
+            text: "확인",
+            onPress: () => {
+              resetForm();
+              setStep("management");
+      // refresh list after returning
+      setTimeout(() => { reloadSellerCards(); }, 0);
+            },
+          },
+        ]
+      );
     } catch (e: any) {
       Alert.alert("업로드 실패", e?.message || "다시 시도해 주세요.");
       setStep("preview");
@@ -304,9 +487,36 @@ export default function SellerPage() {
     try {
       const cam: any = cameraRef.current;
       if (!cam) return;
-      const pic = await cam.takePictureAsync?.({ quality: 0.8, skipProcessing: Platform.OS === "android" });
+  const pic = await cam.takePictureAsync?.({ quality: 0.7, skipProcessing: Platform.OS === "android" });
       if (pic?.uri) {
-        setPhotoUri(pic.uri);
+        // Crop a small bottom strip off to remove any baked-in timestamp overlays from some devices
+        const width = (pic as any).width as number | undefined;
+        const height = (pic as any).height as number | undefined;
+        let finalUri = pic.uri as string;
+        if (width && height && height > 60) {
+          try {
+            const cropBottom = Math.max(40, Math.floor(height * 0.08)); // ~8% or at least 40px
+            const cropHeight = Math.max(1, height - cropBottom);
+            const result = await manipulateAsync(
+              pic.uri,
+              [
+                { crop: { originX: 0, originY: 0, width, height: cropHeight } },
+              ],
+              { compress: 0.9, format: SaveFormat.JPEG }
+            );
+            if (result?.uri) finalUri = result.uri;
+          } catch {}
+        }
+        // Downscale large images (max width ~1600px) to keep under ~2MB
+        try {
+          const resized = await manipulateAsync(
+            finalUri,
+            [ { resize: { width: 1600 } } ],
+            { compress: 0.8, format: SaveFormat.JPEG }
+          );
+          if (resized?.uri) finalUri = resized.uri;
+        } catch {}
+        setPhotoUri(finalUri);
         setStep("confirm-photo");
       }
     } catch (e: any) {
@@ -324,8 +534,10 @@ export default function SellerPage() {
 
   const filteredOptions = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
-    if (!q) return pickerOptions;
-    return pickerOptions.filter((o) => o.toLowerCase().includes(q));
+    const base = pickerOptions;
+    const unique = Array.from(new Set(base));
+    if (!q) return unique;
+    return unique.filter((o) => o.toLowerCase().includes(q));
   }, [pickerOptions, pickerQuery]);
 
   const wordsCount = useMemo(() => description.trim().split(/\s+/).filter(Boolean).length, [description]);
@@ -333,7 +545,7 @@ export default function SellerPage() {
   // UI blocks
   const CameraOverlay = () => (
     <View style={styles.overlayWrap} pointerEvents="none">
-      <View style={styles.instructions}>
+  <View style={[styles.instructions, { top: Math.max(16, insets.top + 8) }]}>
         <Text style={styles.instructionsTitle}>카드를 사각형 안에 맞춰 주세요</Text>
         <Text style={styles.instructionsText}>빛 반사가 적고, 배경이 단색이면 더욱 좋아요.</Text>
       </View>
@@ -358,58 +570,68 @@ export default function SellerPage() {
 
   return (
     <View style={styles.container}>
-      {step === "management" && (
-        <View style={styles.flex1}>
-          <View style={styles.header}>
-            <Text style={styles.title}>판매 중인 카드</Text>
-            <Pressable
-              style={styles.addBtn}
-              onPress={() => {
-                resetForm();
-                setStep("camera");
-              }}
-            >
-              <Text style={styles.addBtnText}>카드 판매</Text>
-            </Pressable>
-          </View>
-          <FlatList
-            data={sellerCards}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <SellerCardItem card={item} />}
-            style={styles.cardList}
-            contentContainerStyle={styles.cardListContent}
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
-      )}
-
-      {step === "camera" && (
-        <View style={styles.flex1}>
-          {!permission?.granted ? (
-            <View style={styles.center}>
-              <Text style={styles.title}>카메라 권한이 필요합니다</Text>
-              <Pressable style={styles.primaryBtn} onPress={() => requestPermission()}>
-                <Text style={styles.primaryBtnText}>권한 허용</Text>
+  <StatusBar hidden={step === "camera"} animated />
+      <View style={styles.flex1}>
+        {step === "management" && (
+          <View style={styles.flex1}>
+            <View style={styles.header}>
+              <Text style={styles.title}>판매 중인 카드</Text>
+              <Pressable
+                style={styles.addBtn}
+                onPress={() => {
+                  resetForm();
+                  setStep("camera");
+                }}
+              >
+                <Text style={styles.addBtnText}>카드 판매</Text>
               </Pressable>
             </View>
-          ) : (
-            <>
-              <CameraView style={styles.camera} ref={cameraRef} facing="back" />
-              <CameraOverlay />
-              <View style={styles.cameraActions}>
-                <Pressable style={styles.shutterBtn} onPress={takePhoto}>
-                  <View style={styles.shutterInner} />
-                </Pressable>
-              </View>
-            </>
-          )}
-        </View>
-      )}
+            <FlatList
+              data={sellerCards}
+              keyExtractor={(item, index) => itemKey(item, index)}
+              renderItem={({ item }) => {
+                let priceNum = 0;
+                if (typeof item.price === "number") priceNum = item.price;
+                else if (typeof item.price === "string") {
+                  const parsed = Number(item.price.replace(/,/g, "").trim());
+                  if (Number.isFinite(parsed)) priceNum = parsed;
+                }
+                const rawTitle = item.card_name || item.title || `${item.category} card`;
+                const cleanTitle = String(rawTitle).replace(/\s*#\d+\b/g, "");
+                return (
+                  <SellerCardListItem
+                    imageUrl={item.image_url ? `${API_BASE}${item.image_url}` : "https://placehold.co/100x130"}
+                    title={cleanTitle}
+                    description={item.description || (item.set ? `${item.set}${item.card_num ? ` • ${item.card_num}` : ""}` : "")}
+                    price={priceNum}
+                    onPress={() => {}}
+                  />
+                );
+              }}
+              refreshing={loadingSellerCards}
+              onRefresh={reloadSellerCards}
+              style={styles.cardList}
+              contentContainerStyle={styles.cardListContent}
+              showsVerticalScrollIndicator={false}
+              onEndReachedThreshold={0.3}
+              onEndReached={loadMoreSellerCards}
+              ListFooterComponent={loadingMore ? (
+                <View style={{ paddingVertical: 12 }}>
+                  <ActivityIndicator />
+                </View>
+              ) : null}
+            />
+          </View>
+        )}
+
+  {/* camera is rendered in a full-screen modal below; confirm-photo is inline */}
 
       {step === "confirm-photo" && (
         <View style={[styles.flex1, styles.pad16]}>
           {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.previewImage} />
+            <View style={styles.previewWrap}>
+              <Image source={{ uri: photoUri }} style={styles.previewImage} />
+            </View>
           ) : (
             <View style={styles.center}><Text>이미지가 없습니다.</Text></View>
           )}
@@ -417,8 +639,128 @@ export default function SellerPage() {
             <Pressable style={styles.secondaryBtn} onPress={() => setStep("camera")}> 
               <Text style={styles.secondaryBtnText}>다시 촬영</Text>
             </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={() => setStep("title-input")}>
+            <Pressable style={styles.primaryBtn} onPress={() => { setEntryMode("api"); setPkSelected(null); setPkSelectedFull(null); setStep("pokemon-search"); }}>
               <Text style={styles.primaryBtnText}>확인</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {step === "pokemon-search" && (
+        <View style={[styles.flex1, styles.pad16]}>
+          <Text style={styles.title}>포켓몬 카드 검색</Text>
+          <Text style={styles.helper}>예: pikachu ex</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              value={pkSearchQuery}
+              onChangeText={setPkSearchQuery}
+              placeholder="카드명을 입력하세요"
+              style={[styles.titleInput, { flex: 1 }]}
+              autoFocus
+              autoCapitalize="none"
+            />
+            <Pressable
+              style={[styles.primaryBtn, { marginLeft: 8 }]}
+              onPress={async () => {
+                try {
+                  setPkLoading(true);
+                  setPkError(null);
+                  const ctrl = new AbortController();
+                  const data = await searchTcgDexCards(pkSearchQuery, 1, 30, "en", ctrl.signal);
+                  setPkResults(data);
+                } catch (e: any) {
+                  setPkError(e?.message || "검색에 실패했습니다.");
+                } finally {
+                  setPkLoading(false);
+                }
+              }}
+            >
+              <Text style={styles.primaryBtnText}>검색</Text>
+            </Pressable>
+          </View>
+          {pkError ? <Text style={[styles.helper, { color: "#DC2626" }]}>{pkError}</Text> : null}
+          {pkLoading ? (
+            <View style={[styles.center, { marginTop: 16 }]}><ActivityIndicator /></View>
+          ) : (
+            <FlatList
+              data={pkResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.resultItem}
+                  onPress={async () => {
+                    setPkDetailLoading(true);
+                    setPkError(null);
+                    try {
+                      const full = await getTcgDexCard(item.id, "en");
+                      setPkSelected(item);
+                      setPkSelectedFull(full);
+                      setEntryMode("api");
+                      const t = `${full.name}`;
+                      setCardTitle(t);
+                      setStep("description-input");
+                    } catch (e: any) {
+                      // fallback to brief on error
+                      setPkSelected(item);
+                      setPkSelectedFull(null);
+                      setEntryMode("api");
+                      const t = `${item.name}`;
+                      setCardTitle(t);
+                      setStep("description-input");
+                      setPkError(e?.message || "상세 정보를 불러오지 못했습니다.");
+                    } finally {
+                      setPkDetailLoading(false);
+                    }
+                  }}
+                >
+                  <View style={styles.resultThumbWrap}>
+                    {item.image ? (
+                      <Image source={{ uri: item.image }} style={styles.resultThumb} />
+                    ) : (
+                      <View style={[styles.resultThumb, { backgroundColor: "#E5E7EB" }]} />
+                    )}
+                  </View>
+                  <View style={styles.resultMeta}>
+                    <Text style={styles.resultTitle}>{item.name}</Text>
+                    <View style={styles.tagRow}>
+                      <View style={styles.tag}><Text style={styles.tagText}>{item.id}</Text></View>
+                      {item.set?.name ? (
+                        <View style={styles.tag}><Text style={styles.tagText}>{item.set.name}</Text></View>
+                      ) : null}
+                      {item.rarity ? (
+                        <View style={styles.tag}><Text style={styles.tagText}>{item.rarity}</Text></View>
+                      ) : null}
+                    </View>
+                  </View>
+                </Pressable>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.sep} />}
+              style={{ marginTop: 12 }}
+            />
+          )}
+          {pkDetailLoading ? (
+            <View style={[styles.center, { marginTop: 8 }]}>
+              <ActivityIndicator />
+              <Text style={styles.helper}>카드 상세 불러오는 중...</Text>
+            </View>
+          ) : null}
+          <View style={styles.rowGap12}>
+            <Pressable style={styles.secondaryBtn} onPress={() => setStep("confirm-photo")}>
+              <Text style={styles.secondaryBtnText}>이전</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() => {
+                // Switch to manual entry flow
+                setPkSelected(null);
+                setPkSelectedFull(null);
+                setEntryMode("manual");
+                setCardTitle("");
+                setCurrentFormStep("category");
+                setStep("title-input");
+              }}
+            >
+              <Text style={styles.secondaryBtnText}>찾는 카드가 없나요? 직접 입력</Text>
             </Pressable>
           </View>
         </View>
@@ -426,23 +768,49 @@ export default function SellerPage() {
 
       {step === "title-input" && (
         <View style={[styles.flex1, styles.pad16]}>
-          <Text style={styles.title}>카드 제목 입력</Text>
-          <Text style={styles.helper}>판매 게시글에 표시될 카드 제목을 입력하세요</Text>
+          <Text style={styles.title}>카드 이름 입력</Text>
           <TextInput
             value={cardTitle}
             onChangeText={setCardTitle}
-            placeholder="예: 피카츄 V 프로모 카드"
+            placeholder="예: 피카츄 EX #045 • Scarlet & Violet"
             style={styles.titleInput}
             autoFocus
           />
           <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => setStep("confirm-photo")}>
+            <Pressable style={styles.secondaryBtn} onPress={() => { setEntryMode("api"); setPkSelected(null); setPkSelectedFull(null); setStep("pokemon-search"); }}>
               <Text style={styles.secondaryBtnText}>이전</Text>
             </Pressable>
-            <Pressable 
-              style={[styles.primaryBtn, { opacity: cardTitle.trim().length === 0 ? 0.5 : 1 }]} 
+            <Pressable
+              style={[styles.primaryBtn, { opacity: cardTitle.trim().length === 0 ? 0.5 : 1 }]}
               disabled={cardTitle.trim().length === 0}
-              onPress={() => setStep("form")}
+              onPress={() => { setCurrentFormStep("category"); setStep("form"); }}
+            >
+              <Text style={styles.primaryBtnText}>다음</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {step === "description-input" && (
+        <View style={[styles.flex1, styles.pad16]}>
+          <Text style={styles.title}>상세 설명 (최대 500 단어)</Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="상세 설명을 입력하세요"
+            style={styles.textArea}
+            multiline
+            autoFocus
+          />
+          <Text style={styles.helper}>{wordsCount} / 500 단어</Text>
+          <View style={styles.rowGap12}>
+            <Pressable style={styles.secondaryBtn} onPress={() => setStep("pokemon-search")}>
+              <Text style={styles.secondaryBtnText}>이전</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.primaryBtn, { opacity: wordsCount > 500 ? 0.5 : 1 }]}
+              disabled={wordsCount > 500}
+              onPress={() => setStep("price-input")}
             >
               <Text style={styles.primaryBtnText}>다음</Text>
             </Pressable>
@@ -510,7 +878,9 @@ export default function SellerPage() {
               </View>
               {isFormStepComplete("region") && currentFormStep !== "region" && <Text style={styles.completeIcon}>✓</Text>}
             </Animated.View>
-          )}          {/* Set Step */}
+          )}
+
+          {/* Set Step */}
           {shouldShowFormStep("set") && (
             <Animated.View style={[styles.formStep, { opacity: currentFormStep === "set" ? fadeAnim : 1 }]}>
               <Text style={styles.stepTitle}>세트 선택</Text>
@@ -650,7 +1020,17 @@ export default function SellerPage() {
           </Pressable>
 
           <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => setStep("form")}>
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() => {
+                if (entryMode === "api") {
+                  setStep("description-input");
+                } else {
+                  setCurrentFormStep("description");
+                  setStep("form");
+                }
+              }}
+            >
               <Text style={styles.secondaryBtnText}>이전</Text>
             </Pressable>
             <Pressable 
@@ -658,7 +1038,7 @@ export default function SellerPage() {
               disabled={price.trim().length === 0}
               onPress={() => setStep("preview")}
             >
-              <Text style={styles.primaryBtnText}>미리보기</Text>
+              <Text style={styles.primaryBtnText}>카드 업로드</Text>
             </Pressable>
           </View>
         </View>
@@ -667,7 +1047,13 @@ export default function SellerPage() {
       {step === "preview" && (
         <View style={styles.formWrap}>
           <Text style={styles.question}>미리보기</Text>
-          <Pressable style={styles.primaryBtn} onPress={() => setPreviewVisible(true)}>
+          <Pressable
+            style={styles.primaryBtn}
+            onPress={() => {
+              if (!cardForPreview) return;
+              openCardPreview?.(cardForPreview);
+            }}
+          >
             <Text style={styles.primaryBtnText}>카드 상세 미리보기 열기</Text>
           </Pressable>
           <View style={styles.rowGap12}>
@@ -687,6 +1073,44 @@ export default function SellerPage() {
           <Text style={styles.helper}>업로드 중...</Text>
         </View>
       )}
+      </View>
+
+      {/* Full-screen camera/preview modal to overlay all UI */}
+      <Modal
+        visible={step === "camera"}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setStep("management")}
+      >
+        <View style={[styles.flex1, { backgroundColor: "#000" }]}>
+          <StatusBar hidden animated />
+          {step === "camera" ? (
+            <View style={styles.flex1}>
+              {!permission?.granted ? (
+                <View style={styles.center}>
+                  <Text style={[styles.title, { color: "#fff" }]}>카메라 권한이 필요합니다</Text>
+                  <Pressable style={styles.primaryBtn} onPress={() => requestPermission()}>
+                    <Text style={styles.primaryBtnText}>권한 허용</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <CameraView style={styles.camera} ref={cameraRef} facing="back" />
+                  <CameraOverlay />
+                  <View style={[
+                    styles.cameraActions,
+                    { bottom: insets.bottom > 0 ? insets.bottom + 12 : 28 }
+                  ]}>
+                    <Pressable style={styles.shutterBtn} onPress={takePhoto}>
+                      <View style={styles.shutterInner} />
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </View>
+          ) : null}
+        </View>
+      </Modal>
 
       {/* Searchable Picker Modal */}
       <Modal visible={pickerVisible} transparent animationType="fade" onRequestClose={() => setPickerVisible(false)}>
@@ -718,12 +1142,7 @@ export default function SellerPage() {
         </View>
       </Modal>
 
-      {/* Preview using existing modal */}
-      <CardDetailModal
-        visible={previewVisible}
-        onClose={() => setPreviewVisible(false)}
-        card={cardForPreview}
-      />
+  {/** Modal is rendered at Home level via openCardPreview */}
     </View>
   );
 }
@@ -745,6 +1164,16 @@ const styles = StyleSheet.create({
   instructionsText: { color: "#fff", marginTop: 4 },
   pad16: { padding: 16 },
   previewImage: { width: "100%", height: 420, borderRadius: 12, backgroundColor: "#f3f4f6" },
+  previewWrap: { position: "relative", width: "100%", height: 420, borderRadius: 12, overflow: "hidden", backgroundColor: "#f3f4f6" },
+  timestampCover: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 56, // cover bottom text overlay
+    backgroundColor: "#000",
+    opacity: 0.85,
+  },
   rowGap12: { width: "100%", gap: 12, marginTop: 16 },
   formWrap: { flex: 1, padding: 16, gap: 12 },
   question: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
@@ -794,4 +1223,16 @@ const styles = StyleSheet.create({
   priceUnit: { marginLeft: 8, fontSize: 16, fontWeight: "600", color: "#6B7280" },
   marketPriceBtn: { backgroundColor: "#F3F4F6", padding: 12, borderRadius: 8, alignItems: "center", marginTop: 12 },
   marketPriceBtnText: { fontSize: 14, color: "#6B7280", textDecorationLine: "underline" },
+  // Search UI styles
+  searchRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
+  resultItem: { flexDirection: "row", paddingVertical: 10, alignItems: "center" },
+  resultThumbWrap: { width: 56, height: 56, borderRadius: 8, overflow: "hidden", backgroundColor: "#F3F4F6", marginRight: 12 },
+  resultThumb: { width: 56, height: 56 },
+  resultMeta: { flex: 1 },
+  resultTitle: { fontSize: 16, fontWeight: "700" },
+  resultSub: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  resultRarity: { fontSize: 12, color: "#111827", marginTop: 4 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  tag: { backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  tagText: { fontSize: 11, color: "#374151", fontWeight: "600" },
 });

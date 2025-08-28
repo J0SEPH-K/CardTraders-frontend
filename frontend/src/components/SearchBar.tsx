@@ -1,5 +1,5 @@
 import React from "react";
-import { View, TextInput, Pressable, Text, StyleSheet } from "react-native";
+import { View, TextInput, StyleSheet } from "react-native";
 
 type Props = {
   value: string;
@@ -20,9 +20,6 @@ export default function SearchBar({ value, onChangeText, onSearch, placeholder }
         style={styles.searchInput}
         placeholderTextColor="#9CA3AF"
       />
-      <Pressable onPress={onSearch} style={styles.searchButton}>
-        <Text style={styles.searchButtonText}>검색</Text>
-      </Pressable>
     </View>
   );
 }
@@ -43,16 +40,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     color: "#111827",
-  },
-  searchButton: {
-    marginLeft: 8,
-    backgroundColor: "#f93414",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  searchButtonText: {
-    color: "#fff",
-    fontWeight: "700",
   },
 });

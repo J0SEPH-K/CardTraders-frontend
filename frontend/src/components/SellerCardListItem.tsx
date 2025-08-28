@@ -6,26 +6,10 @@ type Props = {
   title: string;
   description: string;
   price: number;
-  sellerAddress?: string;
-  uploadDate?: string; // ISO string
   onPress?: () => void;
 };
 
-function formatDate(iso?: string): string {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
-    const y = d.getFullYear();
-    const m = `${d.getMonth() + 1}`.padStart(2, '0');
-    const day = `${d.getDate()}`.padStart(2, '0');
-    return `${y}.${m}.${day}`;
-  } catch {
-    return "";
-  }
-}
-
-export default function CardListItem({ imageUrl, title, description, price, sellerAddress, uploadDate, onPress }: Props) {
+export default function SellerCardListItem({ imageUrl, title, description, price, onPress }: Props) {
   return (
     <Pressable style={styles.container} onPress={onPress}>
       <View style={styles.content}>
@@ -40,13 +24,6 @@ export default function CardListItem({ imageUrl, title, description, price, sell
             <View style={styles.priceWrapper}>
               <Text style={styles.price}>{`${price.toLocaleString()}원`}</Text>
             </View>
-          </View>
-          <View style={styles.bottomMetaRow}>
-            {!!(sellerAddress || uploadDate) && (
-              <Text style={styles.metaText} numberOfLines={1} ellipsizeMode="tail">
-                {`${sellerAddress || ""}${sellerAddress && uploadDate ? " · " : ""}${formatDate(uploadDate)}`}
-              </Text>
-            )}
           </View>
         </View>
       </View>
@@ -97,7 +74,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-  fontFamily: 'GothicA1_400Regular',
+    fontFamily: 'GothicA1_400Regular',
     textAlign: "left",
     paddingLeft: 4,
   },
@@ -110,16 +87,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "300",
     color: "#007AFF",
-  paddingLeft: 4,
-  },
-  bottomMetaRow: {
-    // bottom-left meta line
-    alignItems: 'flex-start',
-    justifyContent: 'flex-end',
-  },
-  metaText: {
-    fontSize: 12,
-    color: '#6B7280',
     paddingLeft: 4,
   },
 });

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
 import CardListItem from "../components/CardListItem";
 import SearchBar from "../components/SearchBar";
-import { CATEGORIES, cards } from "../data/dummy";
+import { CATEGORIES } from "../data/dummy";
+import { API_BASE } from "../api/client";
 
 type Props = {
 	setSelectedCard?: (card: any) => void;
@@ -11,6 +12,31 @@ type Props = {
 export default function BuyerPage({ setSelectedCard }: Props) {
 	const [query, setQuery] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
+	const [items, setItems] = useState<any[]>([]);
+	const [loading, setLoading] = useState(false);
+
+	const load = async () => {
+		try {
+			setLoading(true);
+			const params = new URLSearchParams();
+			if (selectedCategory && selectedCategory !== "all") params.set("category", selectedCategory);
+			if (query.trim()) params.set("q", query.trim());
+			const r = await fetch(`${API_BASE}/uploaded-cards?${params.toString()}`);
+			if (!r.ok) throw new Error(await r.text());
+			const data = await r.json();
+			setItems(Array.isArray(data) ? data : []);
+		} catch (e) {
+			console.error("load uploaded-cards failed", e);
+			setItems([]);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		load();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedCategory]);
 
 	const handleSearch = () => {
 		// Search runs from query state; no additional action required here.
@@ -21,12 +47,13 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 		setSelectedCategory((prev) => (prev === key ? "all" : key));
 	};
 
-	const displayed = cards.filter((c) => {
-		const matchesCategory = selectedCategory === "all" || c.category === selectedCategory;
+	const displayed = useMemo(() => {
 		const q = query.trim().toLowerCase();
-		const matchesQuery = q === "" || c.title.toLowerCase().includes(q);
-		return matchesCategory && matchesQuery;
-	});
+		return items.filter((c) => {
+			const matchesQuery = !q || String(c.card_name || "").toLowerCase().includes(q);
+			return matchesQuery;
+		});
+	}, [items, query]);
 
 	return (
 		<View style={styles.container}>
@@ -49,16 +76,42 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 
 			<FlatList
 				data={displayed}
-				keyExtractor={(item) => item.id}
-					renderItem={({ item }) => (
-						<CardListItem
-							imageUrl={item.imageUrl}
-							title={item.title}
-							description={item.description}
-							price={item.price}
-							onPress={() => setSelectedCard?.(item)}
-						/>
-					)}
+				keyExtractor={(item) => String(item.id)}
+					renderItem={({ item }) => {
+						let priceNum = 0;
+						if (typeof item.price === 'number') {
+							priceNum = item.price;
+						} else if (typeof item.price === 'string') {
+							const parsed = Number(item.price.replace(/,/g, '').trim());
+							if (Number.isFinite(parsed)) priceNum = parsed;
+						}
+						const rawTitle = item.card_name || item.title || `${item.category} card`;
+						const cleanTitle = String(rawTitle).replace(/\s*#\d+\b/g, "");
+						const absoluteImageUrl = item.image_url ? `${API_BASE}${item.image_url}` : "https://placehold.co/100x130";
+						return (
+							<CardListItem
+								imageUrl={absoluteImageUrl}
+								title={cleanTitle}
+								description={item.description || (item.set ? `${item.set}${item.card_num ? ` • ${item.card_num}` : ""}` : "")}
+								price={priceNum}
+							sellerAddress={item.seller_address}
+							uploadDate={item.uploadDate || item.createdAt}
+								onPress={() => {
+									// Provide absolute URL for detail modal compatibility and normalize title
+									const selected = {
+										...item,
+										imageUrl: absoluteImageUrl,
+										image_url: absoluteImageUrl,
+										title: cleanTitle,
+										price: priceNum,
+									};
+									setSelectedCard?.(selected);
+								}}
+							/>
+						);
+					}}
+				refreshing={loading}
+				onRefresh={load}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}
 			/>
