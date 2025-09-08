@@ -6,6 +6,7 @@ export type UserPublic = {
 	username: string;
 	email: string;
 	phone_num?: string | null;
+	bank_acc?: string | null;
 	address?: string | null;
 	signup_date?: string | null;
 	suggested_num?: number;

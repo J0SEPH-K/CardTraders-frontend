@@ -2,8 +2,10 @@ import React, { useMemo, useState } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
 import ChatBlock, { Conversation } from "@/components/ChatBlock";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function MessagePage() {
+	const insets = useSafeAreaInsets();
 	const navigation = useNavigation<any>();
 	// TODO: Replace with real data from API
 	const [items, setItems] = useState<Conversation[]>([
@@ -38,7 +40,7 @@ export default function MessagePage() {
 	};
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, { paddingBottom: insets.bottom }] }>
 			<FlatList
 				data={items}
 				keyExtractor={(it) => it.id}

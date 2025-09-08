@@ -197,10 +197,10 @@ export default function SignUpPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 16, gap: 12 },
+  container: { flex: 1, backgroundColor: "#FAF9F6", paddingHorizontal: 16, gap: 12 },
   title: { fontSize: 22, fontWeight: "800", marginBottom: 6 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  input: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, backgroundColor: "#fff" },
+  input: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, backgroundColor: "#FAF9F6" },
   actionBtn: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#F3F4F6", alignItems: "center" },
   actionText: { fontWeight: "700", color: "#111827" },
   submitBtn: { backgroundColor: ACCENT, padding: 14, borderRadius: 12, alignItems: "center", marginTop: 8 },

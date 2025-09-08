@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, FlatList, StyleSheet, Text, Pressable, Animated, NativeSyntheticEvent, NativeScrollEvent, RefreshControl, Platform } from "react-native";
 import CardListItem from "../components/CardListItem";
 import SearchBar from "../components/SearchBar";
 import { CATEGORIES } from "../data/dummy";
@@ -14,6 +14,15 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 	const [items, setItems] = useState<any[]>([]);
 	const [loading, setLoading] = useState(false);
+
+	// Fixed overlay header under the app title; list pulls-to-refresh beneath it
+	const headerTranslateY = useRef(new Animated.Value(0)).current;
+	const [headerHeight, setHeaderHeight] = useState(0);
+	const lastY = useRef(0);
+	const isHidden = useRef(false);
+	const upAccum = useRef(0);
+	const downAccum = useRef(0);
+	const isUserDragging = useRef(false);
 
 	const load = async () => {
 		try {
@@ -55,24 +64,85 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 		});
 	}, [items, query]);
 
+	// Handle scroll: hide/show only when the user is actively dragging with a finger
+	const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+		const y = e.nativeEvent.contentOffset.y;
+		const dy = y - lastY.current;
+
+		// If not user-dragging (momentum/bounce), ignore direction to prevent accidental show/hide
+		if (!isUserDragging.current) {
+			// Still ensure header becomes visible when near the very top
+			if (y < 5 && isHidden.current) {
+				isHidden.current = false;
+				upAccum.current = 0;
+				downAccum.current = 0;
+				Animated.timing(headerTranslateY, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+			}
+			lastY.current = y;
+			return;
+		}
+		if (dy > 0) {
+			downAccum.current += dy;
+			upAccum.current = 0;
+			if (!isHidden.current && downAccum.current > 8 && y > 0) {
+				isHidden.current = true;
+				Animated.timing(headerTranslateY, { toValue: -headerHeight, duration: 180, useNativeDriver: true }).start();
+			}
+		} else if (dy < 0) {
+			upAccum.current += -dy;
+			downAccum.current = 0;
+			if (isHidden.current && upAccum.current > 8) {
+				isHidden.current = false;
+				Animated.timing(headerTranslateY, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+			}
+		}
+		// Always show when very near top
+		if (y < 12 && isHidden.current) {
+			isHidden.current = false;
+			upAccum.current = 0;
+			downAccum.current = 0;
+			Animated.timing(headerTranslateY, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+		}
+		lastY.current = y;
+	};
+
+	const onScrollBeginDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+		isUserDragging.current = true;
+		lastY.current = e.nativeEvent.contentOffset.y;
+		// Reset accumulators at the start of a user drag for clean detection
+		upAccum.current = 0;
+		downAccum.current = 0;
+	};
+
+	const onScrollEndDrag = () => {
+		isUserDragging.current = false;
+	};
+
 	return (
 		<View style={styles.container}>
-			<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="카드 검색" />
-
-			<View style={styles.filterRow}>
-				{CATEGORIES.map((cat) => {
-					const active = selectedCategory === cat.key;
-					return (
-						<Pressable
-							key={cat.key}
-							onPress={() => toggleCategory(cat.key)}
-							style={[styles.filterButton, active && styles.filterButtonActive]}
-						>
-							<Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{cat.label}</Text>
-						</Pressable>
-					);
-				})}
-			</View>
+			{/* Fixed search header (does not move during pull-to-refresh) */}
+			<Animated.View
+				style={[styles.headerOverlay, { transform: [{ translateY: headerTranslateY }] }]}
+				onLayout={(e) => setHeaderHeight(Math.round(e.nativeEvent.layout.height))}
+			>
+				<View style={styles.headerInner}>
+					<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="카드 검색" />
+					<View style={styles.filterRow}>
+						{CATEGORIES.map((cat) => {
+							const active = selectedCategory === cat.key;
+							return (
+								<Pressable
+									key={cat.key}
+									onPress={() => toggleCategory(cat.key)}
+									style={[styles.filterButton, active && styles.filterButtonActive]}
+								>
+									<Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{cat.label}</Text>
+								</Pressable>
+							);
+						})}
+					</View>
+				</View>
+			</Animated.View>
 
 			<FlatList
 				data={displayed}
@@ -110,10 +180,19 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 							/>
 						);
 					}}
-				refreshing={loading}
-				onRefresh={load}
+				refreshControl={
+					<RefreshControl
+						refreshing={loading}
+						onRefresh={load}
+						progressViewOffset={Platform.OS === 'android' ? headerHeight : 0}
+					/>
+				}
+				onScroll={onScroll}
+				onScrollBeginDrag={onScrollBeginDrag}
+				onScrollEndDrag={onScrollEndDrag}
 				showsVerticalScrollIndicator={false}
-				contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}
+					contentContainerStyle={{ paddingBottom: 24, paddingTop: Platform.OS === 'android' ? headerHeight : 0 }}
+					{...(Platform.OS === 'ios' ? { contentInset: { top: headerHeight }, scrollIndicatorInsets: { top: headerHeight } } : {})}
 			/>
 		</View>
 	);
@@ -122,7 +201,19 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: "#fff",
+		backgroundColor: "#FAF9F6",
+	},
+	headerOverlay: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		top: 0,
+		backgroundColor: "#FAF9F6",
+		zIndex: 1,
+	},
+	headerInner: {
+		marginTop: 0,
+		paddingTop: 0,
 	},
 	filterRow: {
 		flexDirection: "row",

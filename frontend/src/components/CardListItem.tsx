@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+  backgroundColor: "#FAF9F6",
     borderRadius: 16,
     overflow: "hidden", // clip children to rounded corners
     minHeight: 130,

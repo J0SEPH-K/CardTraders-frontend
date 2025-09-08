@@ -37,14 +37,14 @@ export default function AnnouncementsPage(){
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
+  safeArea: { flex: 1, backgroundColor: '#FAF9F6' },
   container: { padding: 16, gap: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingRight: 8 },
   backIcon: { fontSize: 24, color: '#111827' },
   backText: { fontSize: 16, color: '#111827' },
   headerTitle: { fontSize: 18, fontWeight: '600' },
-  card: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 16 },
+  card: { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 16 },
   title: { fontSize: 16, fontWeight: '600', marginBottom: 6 },
   body: { color: '#374151' },
 });

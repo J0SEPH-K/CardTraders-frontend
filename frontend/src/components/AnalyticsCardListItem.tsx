@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     borderRadius: 16,
-    backgroundColor: "#fff",
+  backgroundColor: "#FAF9F6",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.12,

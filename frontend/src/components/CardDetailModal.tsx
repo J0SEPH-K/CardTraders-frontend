@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, Image, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { getOrCreateConversation } from "@/api/client";
+import { useAuth } from "@/store/useAuth";
 type AnyCard = {
   id?: string | number;
   imageUrl?: string;
@@ -19,6 +21,17 @@ type AnyCard = {
   pokemon?: any;
   yugioh?: any;
   uploadedBy?: number | string;
+  // optional seller name variants that may come from API
+  seller_name?: string;
+  sellerName?: string;
+  uploaderName?: string;
+  uploadedByName?: string;
+  username?: string;
+  userName?: string;
+  name?: string;
+  seller?: { name?: string } | any;
+  user?: { name?: string; username?: string; displayName?: string } | any;
+  profile?: { name?: string; displayName?: string } | any;
 } | null;
 
 type Props = {
@@ -34,6 +47,7 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
   const [lastCard, setLastCard] = useState<AnyCard>(card ?? null);
   const scrollRef = useRef<ScrollView | null>(null);
   const navigation = useNavigation<any>();
+  const me = useAuth((s)=>s.user);
 
   useEffect(() => {
     if (card) setLastCard(card);
@@ -68,15 +82,42 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
   // Precompute formatted upload date (use uploadDate or createdAt from DB)
   const formattedUploadDate = formatYMD(displayedCard?.uploadDate || displayedCard?.createdAt);
 
-  const handleMessageSeller = () => {
+  // Resolve seller name from multiple possible fields
+  const sellerName: string | undefined = (() => {
+    if (!displayedCard) return undefined;
+    const get = (v: unknown) => (typeof v === "string" ? v.trim() || undefined : undefined);
+    const fromUploadedByStr = get(displayedCard.uploadedBy);
+    const fromSeller = get((displayedCard as any)?.seller?.name);
+    const fromUser = get((displayedCard as any)?.user?.displayName) || get((displayedCard as any)?.user?.username) || get((displayedCard as any)?.user?.name);
+    const fromProfile = get((displayedCard as any)?.profile?.displayName) || get((displayedCard as any)?.profile?.name);
+    const direct =
+      get((displayedCard as any)?.seller_name) ||
+      get((displayedCard as any)?.sellerName) ||
+      get((displayedCard as any)?.uploaderName) ||
+      get((displayedCard as any)?.uploadedByName) ||
+      get((displayedCard as any)?.username) ||
+      get((displayedCard as any)?.userName) ||
+      get((displayedCard as any)?.name);
+    return direct || fromSeller || fromUser || fromProfile || fromUploadedByStr || (displayedCard.uploadedBy !== undefined && displayedCard.uploadedBy !== null ? String(displayedCard.uploadedBy) : undefined);
+  })();
+
+  const handleMessageSeller = async () => {
     const sellerId = displayedCard?.uploadedBy as number | string | undefined;
     const cardId = displayedCard?.id as number | string | undefined;
+    // Close the modal before opening chat
+    onClose?.();
     if (onMessageSeller) {
       onMessageSeller(sellerId, cardId);
       return;
     }
     try {
-      navigation.navigate("Chat", { sellerId, cardId });
+      const title = (displayedCard?.title || (displayedCard as any)?.card_name || "대화") as string;
+      const imageUrl = (displayedCard?.imageUrl || "https://placehold.co/1000x600") as string;
+      const buyerId = me?.userId;
+      const sellerUserId = (typeof sellerId === 'number' ? String(sellerId) : String(sellerId || "")).trim();
+      if (!buyerId || !sellerUserId) throw new Error("missing user ids");
+  const conv = await getOrCreateConversation([buyerId, sellerUserId], String(cardId ?? ""));
+      navigation.navigate("PrivateMessage", { convoId: conv.id, sellerId, cardId, title, imageUrl });
     } catch {
       // no-op if route missing; parent can pass onMessageSeller to handle
     }
@@ -154,6 +195,9 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                   <Text style={styles.title}>{displayedCard.title || displayedCard.card_name || "카드"}</Text>
                   {typeof displayedCard.price === 'number' ? (
                     <Text style={styles.price}>{`₩${Math.round(displayedCard.price).toLocaleString()}`}</Text>
+                  ) : null}
+                  {sellerName ? (
+                    <Text style={styles.sellerText}>{`업로드한 유저: ${sellerName}`}</Text>
                   ) : null}
                   {showUploadDate && formattedUploadDate ? (
                     <Text style={styles.uploadDateText}>{`업로드 날짜: ${formattedUploadDate}`}</Text>
@@ -308,7 +352,7 @@ const styles = StyleSheet.create({
   },
   container: {
     width: "100%",
-    backgroundColor: "#fff",
+  backgroundColor: "#FAF9F6",
     borderRadius: 18,
     overflow: "hidden",
   marginTop: 32,
@@ -413,6 +457,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 4,
+  },
+  sellerText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 6,
   },
   // removed bottom close button
 });

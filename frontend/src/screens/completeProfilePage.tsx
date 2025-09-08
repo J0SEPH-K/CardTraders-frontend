@@ -35,9 +35,9 @@ export default function CompleteProfilePage({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 16, gap: 12 },
+  container: { flex: 1, backgroundColor: "#FAF9F6", paddingHorizontal: 16, gap: 12 },
   title: { fontSize: 22, fontWeight: "800", marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, backgroundColor: "#fff" },
+  input: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, backgroundColor: "#FAF9F6" },
   submitBtn: { backgroundColor: "#f93414", padding: 14, borderRadius: 12, alignItems: "center", marginTop: 8 },
   submitText: { color: "#fff", fontWeight: "800" },
 });

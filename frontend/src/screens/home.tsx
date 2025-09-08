@@ -12,6 +12,8 @@ import {
   Platform,
 } from "react-native";
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '@/store/useAuth';
+import { API_BASE } from '@/api/client';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import BuyerPage from "./buyerPage";
@@ -45,7 +47,7 @@ const TAB_BAR_HEIGHT = 40;
 // new border constants
 const TAB_BORDER_WIDTH = 3;
 const TAB_BORDER_COLOR = "#f93414";
-const TAB_BACKGROUND = "#fff";
+const TAB_BACKGROUND = "#FAF9F6";
 
 export default function Home() {
   const navigation = useNavigation<any>();
@@ -74,6 +76,7 @@ export default function Home() {
   const [selectedIndex, setSelectedIndex] = useState<number>(initialIndex);
   const [selectedCard, setSelectedCard] = useState<BuyerCard | null>(null);
   const [sellerPreviewCard, setSellerPreviewCard] = useState<BuyerCard | null>(null);
+  const user = useAuth((s) => s.user);
   
   // gesture helpers
   const gestureStartIndexRef = useRef<number>(initialIndex);
@@ -181,24 +184,43 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+  {/* top-of-screen rectangular cover matching header background */}
+  <View pointerEvents="none" style={[styles.screenTopRect, { height: insets.top }]} />
       <View style={styles.content}>
-        {/* header with title and profile button */}
-        <View style={{ paddingHorizontal: 24, paddingTop: 12 }}>
+  {/* header with title and profile button (kept above page content) */}
+  <View style={[styles.headerContainer, { paddingHorizontal: 24, paddingTop: 8, minHeight: 20 }]}>
           <View style={styles.headerRow}>
             <Text style={{ fontSize: 30, fontFamily: 'Urbanist_500Medium', letterSpacing: 1 }}>CART</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="프로필로 이동"
-              onPress={() => navigation.navigate('Profile')}
-              style={styles.profileButton}
-            >
-              <Icon name="user-circle" size={26} color="#111827" />
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="대화 목록으로 이동"
+                onPress={() => navigation.navigate('Conversations')}
+                style={[styles.profileButton, { borderColor: '#f93414', borderWidth: 2 }]}
+              >
+                <Icon name="comments" size={22} color="#111827" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="프로필로 이동"
+                onPress={() => navigation.navigate('Profile')}
+                style={styles.profileButton}
+              >
+                {user?.pfp?.url ? (
+                  <Image
+                    source={{ uri: user.pfp.url?.startsWith('http') ? user.pfp.url : `${API_BASE}${user.pfp.url}` }}
+                    style={styles.profileImage}
+                  />
+                ) : (
+                  <Icon name="user-circle" size={26} color="#111827" />
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
 
         {/* content area: pages laid out horizontally and translated to create slide */}
-        <Animated.View
+    <Animated.View
           {...panResponder.panHandlers}
           style={{
             flex: 1,
@@ -206,6 +228,7 @@ export default function Home() {
             flexDirection: "row",
             width: windowWidth * TAB_ICONS.length,
             transform: [{ translateX: contentTranslate }],
+      zIndex: 0,
           }}
         >
           <View style={{ width: windowWidth, flex: 1 }}>{/* 0 */}
@@ -373,7 +396,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: { flex: 1, backgroundColor: "#FAF9F6" },
   content: { flex: 1 },
   tabBar: {
     position: "absolute",
@@ -390,6 +413,20 @@ const styles = StyleSheet.create({
     zIndex: 3,
     overflow: "hidden",
   },
+  headerContainer: {
+    zIndex: 2,
+    elevation: 2,
+    backgroundColor: "#FAF9F6",
+    position: 'relative',
+  },
+  screenTopRect: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FAF9F6',
+    zIndex: 3,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -403,6 +440,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
+    backgroundColor: '#FAF9F6',
+  },
+  profileImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    resizeMode: 'cover',
   },
 });

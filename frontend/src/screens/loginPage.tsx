@@ -5,6 +5,7 @@ import {
 	StyleSheet,
 	TextInput,
 	Pressable,
+	Image,
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
@@ -18,9 +19,13 @@ import { loginApi, loginWithGoogle } from "../api/client";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 import { useNavigation } from "@react-navigation/native";
+import { FontAwesome } from '@expo/vector-icons';
 
 const ACCENT = "#f93414";
+// When true, social auth UI is visually disabled and not clickable (beta mode)
+const SOCIAL_DISABLED = true;
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -31,25 +36,24 @@ export default function LoginPage() {
 	const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? extra?.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 	const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? extra?.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 
-	// Detect Expo Go vs Native (dev build/standalone)
-	const isExpoGo = Constants.appOwnership === "expo";
-
-	// Determine if Google auth is configured for current platform
-	const googleReady = useMemo(() => {
-		if (isExpoGo) return Boolean(expoClientId);
-		if (Platform.OS === "ios") return Boolean(iosClientId);
-		if (Platform.OS === "android") return Boolean(androidClientId);
-		return Boolean(expoClientId);
-	}, [isExpoGo, expoClientId, iosClientId, androidClientId]);
-
-	const googleConfig = useMemo(() => {
-		if (isExpoGo) {
-			return { expoClientId } as const;
+	// Debug: log environment and redirect URIs
+	React.useEffect(() => {
+		if (typeof __DEV__ !== "undefined" && __DEV__) {
+			try {
+				const redirectDefault = AuthSession.makeRedirectUri();
+				console.log("[GoogleAuth] config", {
+					appOwnership: Constants.appOwnership,
+					scheme: (Constants as any)?.expoConfig?.scheme,
+					expoClientId: Boolean(expoClientId),
+					iosClientId: Boolean(iosClientId),
+					androidClientId: Boolean(androidClientId),
+					redirectDefault,
+				});
+			} catch (e) {
+				console.log("[GoogleAuth] debug error", e);
+			}
 		}
-		return { iosClientId, androidClientId } as const;
-	}, [isExpoGo, expoClientId, iosClientId, androidClientId]);
-
-	const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleConfig as any);
+	}, [expoClientId, iosClientId, androidClientId]);
 	const insets = useSafeAreaInsets();
 	const setUser = useAuth((s) => s.setUser);
 
@@ -119,49 +123,108 @@ export default function LoginPage() {
 		}
 	};
 
-	const SocialButtons = () => (
-		<View style={{ gap: 10 }}>
-					<Pressable
-						style={[
-							styles.socialBtn,
-							{ backgroundColor: "#fff", borderColor: "#4285F4", borderWidth: 1, opacity: request && googleReady ? 1 : 0.6 },
-						]}
-						disabled={!googleReady}
+	// Subcomponent that only mounts when required client IDs exist; keeps hooks order valid
+	const SocialButtonsReady: React.FC = () => {
+		const isExpoGo = Constants.appOwnership === "expo";
+		// Build a proxied redirect for Expo Go so Google gets an https://auth.expo.dev URL (hardcoded to match console)
+		const proxyRedirectUri = "https://auth.expo.dev/@jungjunkim/cardtraders";
+		const googleRequestConfig: any = isExpoGo
+			? { clientId: expoClientId, redirectUri: proxyRedirectUri }
+			: { iosClientId, androidClientId };
+		const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleRequestConfig);
+		return (
+				<View style={styles.socialRowContainer}>
+					<View style={styles.socialRow}>
+			<Pressable
+				style={[styles.socialIconBtn, { backgroundColor: "#fff", borderColor: "#4285F4", borderWidth: 1, opacity: request ? 1 : 0.6 }]}
 						onPress={async () => {
-							try {
-								if (!googleReady) {
-									Alert.alert("구글 로그인 설정 필요", "환경변수에 Google Client ID를 설정해 주세요.");
+						try {
+							if (typeof __DEV__ !== "undefined" && __DEV__) {
+								console.log("[GoogleAuth] request", {
+									isExpoGo,
+									requestRedirectUri: (request as any)?.redirectUri,
+									proxyRedirectUri,
+									usingClientKey: Object.keys(googleRequestConfig),
+								});
+							}
+							// Force proxy usage in Expo Go to avoid exp:// redirect rejections
+							const res = await (promptAsync as any)({ useProxy: isExpoGo, projectNameForProxy: "@jungjunkim/cardtraders" });
+							if (res?.type === "success") {
+								const idToken = (res as any)?.params?.id_token as string | undefined;
+								if (!idToken) throw new Error("Google 인증 실패: id_token 없음");
+								const { user } = await loginWithGoogle(idToken);
+								if (!user || !user.username || !user.address) {
+									(navigation as any).navigate("CompleteProfile", { idToken });
 									return;
 								}
-								const res = await promptAsync();
-								if (res?.type === "success") {
-									const idToken = (res as any)?.params?.id_token as string | undefined;
-									if (!idToken) throw new Error("Google 인증 실패: id_token 없음");
-									const { user } = await loginWithGoogle(idToken);
-									if (!user || !user.username || !user.address) {
-										(navigation as any).navigate("CompleteProfile", { idToken });
-										return;
-									}
-									setUser(user);
+								setUser(user);
+							} else {
+								if (typeof __DEV__ !== "undefined" && __DEV__) {
+									console.log("[GoogleAuth] prompt result", res);
 								}
-							} catch (e: any) {
-								Alert.alert("Google 로그인 실패", e?.message || "다시 시도해 주세요");
+								const err = (res as any)?.error || (res as any)?.params?.error;
+								const desc = (res as any)?.params?.error_description || (res as any)?.error_description;
+								if (err) {
+									Alert.alert("Google 로그인 실패", `${err}${desc ? `: ${desc}` : ""}`);
+								}
 							}
-						}}
-					> 
-						<Text style={[styles.socialText, { color: "#4285F4" }]}>Google 계정으로 계속</Text>
+						} catch (e: any) {
+							Alert.alert("Google 로그인 실패", e?.message || "다시 시도해 주세요");
+						}
+					}}
+				>
+					<FontAwesome name="google" size={20} color="#4285F4" />
+				</Pressable>
+				<Pressable style={[styles.socialIconBtn, { backgroundColor: "#000" }]} onPress={() => Alert.alert("Apple", "애플 로그인은 곧 제공됩니다.")}> 
+					<FontAwesome name="apple" size={20} color="#fff" />
+				</Pressable>
+				<Pressable style={[styles.socialIconBtn, { backgroundColor: "#FEE500" }]} onPress={() => Alert.alert("Kakao", "카카오 로그인은 곧 제공됩니다.")}> 
+					<Text style={[styles.socialIconText, { fontWeight: '700' }]}>카</Text>
+				</Pressable>
+				<Pressable style={[styles.socialIconBtn, { backgroundColor: "#03C75A" }]} onPress={() => Alert.alert("Naver", "네이버 로그인은 곧 제공됩니다.")}> 
+					<Text style={[styles.socialIconText, { fontWeight: '700', color: '#fff' }]}>N</Text>
+				</Pressable>
+				</View>
+
+			</View>
+		);
+	};
+
+	const SocialButtons: React.FC = () => {
+		const isExpoGo = Constants.appOwnership === "expo";
+		const ready = isExpoGo
+			? Boolean(expoClientId)
+			: Platform.OS === "ios"
+			? Boolean(iosClientId)
+			: Platform.OS === "android"
+			? Boolean(androidClientId)
+			: Boolean(expoClientId);
+		if (!ready) {
+			return (
+				<View style={styles.socialRowContainer}>
+					<View style={styles.socialRow}>
+					<Pressable
+						style={[styles.socialIconBtn, { backgroundColor: "#fff", borderColor: "#4285F4", borderWidth: 1, opacity: 0.5 }]}
+						onPress={() => Alert.alert("구글 로그인 설정 필요", "환경변수 또는 app.json extra에 Google Client ID를 설정 후 앱을 다시 빌드/재시작하세요.")}
+					>
+					<FontAwesome name="google" size={20} color="#4285F4" />
 					</Pressable>
-			<Pressable style={[styles.socialBtn, { backgroundColor: "#000" }]} onPress={() => Alert.alert("Apple", "애플 로그인은 곧 제공됩니다.")}> 
-				<Text style={[styles.socialText, { color: "#fff" }]}>Apple 계정으로 계속</Text>
-			</Pressable>
-			<Pressable style={[styles.socialBtn, { backgroundColor: "#FEE500" }]} onPress={() => Alert.alert("Kakao", "카카오 로그인은 곧 제공됩니다.")}> 
-				<Text style={[styles.socialText, { color: "#111" }]}>카카오톡 계정으로 계속</Text>
-			</Pressable>
-			<Pressable style={[styles.socialBtn, { backgroundColor: "#03C75A" }]} onPress={() => Alert.alert("Naver", "네이버 로그인은 곧 제공됩니다.")}> 
-				<Text style={[styles.socialText, { color: "#fff" }]}>네이버 계정으로 계속</Text>
-			</Pressable>
-		</View>
-	);
+					<Pressable style={[styles.socialIconBtn, { backgroundColor: "#000" }]} onPress={() => Alert.alert("Apple", "애플 로그인은 곧 제공됩니다.")}> 
+				<FontAwesome name="apple" size={20} color="#fff" />
+					</Pressable>
+					<Pressable style={[styles.socialIconBtn, { backgroundColor: "#FEE500" }]} onPress={() => Alert.alert("Kakao", "카카오 로그인은 곧 제공됩니다.")}> 
+				<Text style={[styles.socialIconText, { fontWeight: '700' }]}>카</Text>
+					</Pressable>
+					<Pressable style={[styles.socialIconBtn, { backgroundColor: "#03C75A" }]} onPress={() => Alert.alert("Naver", "네이버 로그인은 곧 제공됩니다.")}> 
+				<Text style={[styles.socialIconText, { fontWeight: '700', color: '#fff' }]}>N</Text>
+					</Pressable>
+					</View>
+
+				</View>
+				);
+		}
+		return <SocialButtonsReady />;
+	};
 
 	const onPressIn = () => Animated.spring(loginScale, { toValue: 0.96, useNativeDriver: true }).start();
 	const onPressOut = () => Animated.spring(loginScale, { toValue: 1, useNativeDriver: true }).start();
@@ -169,13 +232,10 @@ export default function LoginPage() {
 	const errorTranslateX = errorShake.interpolate({ inputRange: [-1, 0, 1], outputRange: [-8, 0, 8] });
 
 	return (
-		<KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#fff" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+		<KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#FAF9F6" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
 			<ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-				<View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-					<View style={styles.header}>
-						<Text style={styles.brand}>CardTraders</Text>
-						<Text style={styles.subtitle}>쉽고 안전한 카드 거래</Text>
-					</View>
+				<View style={[styles.container, { paddingTop: 0, paddingBottom: insets.bottom + 24, justifyContent: 'center' }]}> 
+					{/* header removed — content centered below */}
 
 					{authError ? (
 						<Animated.View style={[styles.errorBanner, { transform: [{ translateX: errorTranslateX }] }]}>
@@ -184,6 +244,7 @@ export default function LoginPage() {
 					) : null}
 
 					<View style={{ gap: 14, width: "100%" }}>
+						<Image source={require('../assets/CardTradersLogo_Original.png')} style={styles.cardLogo} />
 						<Animated.View style={[styles.inputWrap, { borderColor: emailBorderColor }]}
 						>
 							<TextInput
@@ -235,13 +296,21 @@ export default function LoginPage() {
 						<View style={styles.divider} />
 					</View>
 
-					<SocialButtons />
+					<View style={styles.socialAndSignupContainer}>
+						<SocialButtons />
 
-					<View style={styles.signupRow}>
-						<Text style={{ color: "#6B7280" }}>계정이 없으신가요?</Text>
-						<Pressable onPress={() => (navigation as any).navigate('SignUp')}>
-							<Text style={{ color: ACCENT, fontWeight: "700" }}>가입하기</Text>
-						</Pressable>
+						<View style={styles.signupRow}>
+							<Text style={{ color: "#6B7280" }}>계정이 없으신가요?</Text>
+							<Pressable onPress={() => (navigation as any).navigate('SignUp')}>
+								<Text style={{ color: ACCENT, fontWeight: "700" }}>가입하기</Text>
+							</Pressable>
+						</View>
+
+						{SOCIAL_DISABLED ? (
+							<View pointerEvents="auto" style={styles.socialOverlay}>
+								<Text style={styles.socialOverlayText}>베타 모드 — 사용 불가</Text>
+							</View>
+						) : null}
 					</View>
 				</View>
 			</ScrollView>
@@ -250,7 +319,10 @@ export default function LoginPage() {
 }
 
 const styles = StyleSheet.create({
-	container: { flex: 1, alignItems: "center", paddingHorizontal: 20, gap: 24, backgroundColor: "#fff" },
+	container: { flex: 1, alignItems: "center", paddingHorizontal: 20, gap: 24, backgroundColor: "#FAF9F6" },
+	socialRow: { width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
+	socialIconBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginHorizontal: 6 },
+	socialIconText: { fontSize: 18, color: '#111' },
 	header: { width: "100%", marginTop: 8 },
 	brand: { fontSize: 32, fontWeight: "800", color: "#111" },
 	subtitle: { fontSize: 14, color: "#6B7280", marginTop: 6 },
@@ -260,12 +332,13 @@ const styles = StyleSheet.create({
 		borderRadius: 14,
 		paddingHorizontal: 14,
 		paddingVertical: 12,
-		backgroundColor: "#fff",
+		height: 56, // fixed height to prevent layout shift when typing
+		backgroundColor: "#FAF9F6",
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 	},
-	input: { flex: 1, fontSize: 16, paddingRight: 12 },
+    input: { flex: 1, fontSize: 16, paddingRight: 12, height: '100%', textAlignVertical: 'center', includeFontPadding: false },
 	fieldError: { color: "#DC2626", fontSize: 12, marginTop: -6, marginBottom: 4 },
 	loginBtn: { backgroundColor: ACCENT, paddingVertical: 14, borderRadius: 14, alignItems: "center" },
 	loginText: { color: "#fff", fontSize: 16, fontWeight: "800" },
@@ -277,5 +350,10 @@ const styles = StyleSheet.create({
 	signupRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
 	errorBanner: { width: "100%", backgroundColor: "#FEE2E2", borderRadius: 12, padding: 12 },
 	errorText: { color: "#B91C1C", fontWeight: "700" },
+	cardLogo: { width: 220, height: 80, alignSelf: 'center', resizeMode: 'contain', marginBottom: 12 },
+	socialRowContainer: { width: '100%', alignItems: 'center', justifyContent: 'center' },
+	socialOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+	socialOverlayText: { color: '#374151', fontWeight: '700' },
+	socialAndSignupContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', position: 'relative' },
 });
 

@@ -121,6 +121,20 @@ export async function completeProfileGoogle(idToken: string, username: string, a
   return api<LoginResponse>(`/auth/complete-profile-google`, { method: "POST", body: JSON.stringify({ idToken, username, address }) });
 }
 
+export async function updateProfileApi(payload: {
+  id?: string | null;
+  userId?: string;
+  email?: string;
+  username?: string;
+  phone_num?: string;
+  address?: string;
+  // One of the following for avatar; image_base64 takes precedence if provided
+  image_base64?: string | null;
+  pfp_url?: string | null;
+}): Promise<LoginResponse> {
+  return api<LoginResponse>(`/auth/update-profile`, { method: "POST", body: JSON.stringify(payload) });
+}
+
 // Uploaded cards API
 export type CreateUploadedCardPayload = {
   category: string;
@@ -140,4 +154,140 @@ export type CreateUploadedCardPayload = {
 export async function createUploadedCard(payload: CreateUploadedCardPayload) {
   // Use trailing slash to match FastAPI router prefix + "/" route and avoid 307 redirect
   return api(`/uploaded-cards/`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function getUploadedCard(id: string | number) {
+  return api<any>(`/uploaded-cards/${encodeURIComponent(String(id))}`);
+}
+
+export async function advertiseUploadedCard(id: string | number) {
+  return api<any>(`/uploaded-cards/${encodeURIComponent(String(id))}/advertise`, { method: 'POST' });
+}
+
+// Chat API
+export type Conversation = {
+  id: string;
+  participants: string[];
+  participantsHash: string;
+  listingId?: string | null;
+  lastMessage?: { text: string; senderId: string; at: string };
+  unread?: Record<string, number>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getOrCreateConversation(participants: string[], listingId?: string | null) {
+  return api<Conversation>(`/chats/conversations/get-or-create`, {
+    method: "POST",
+    body: JSON.stringify({ participants, listingId: listingId ?? null }),
+  });
+}
+
+export type ChatMessage = {
+  id: string;
+  convoId: string;
+  senderId: string;
+  text?: string;
+  imageUrl?: string;
+  at: string;
+  status?: string;
+  // optional payment message fields
+  type?: string;
+  paymentId?: string;
+  meta?: any;
+};
+
+// Payments API
+export async function createOrder(payload: { buyer_id: string; seller_id: string; chatId?: string | null; item_id?: string | null; amount: number; currency?: string; }) {
+  return api<{ order_id: string; checkout_url?: string; provider_token?: string; message_id?: string; payment_reference?: string }>(`/payments/create`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function openBankingStart(payment_id: string) {
+  return api<{ auth_url: string }>(`/payments/openbanking/start/${encodeURIComponent(payment_id)}`);
+}
+
+export async function reconcileTransaction(tx: { tx_id: string; amount: number; description?: string; payer_name?: string }) {
+  return api<{ matched_order_id?: string; matched: boolean; reason?: string }>(`/payments/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify(tx),
+  });
+}
+
+export async function uploadProof(order_id: string, proof_url: string) {
+  return api<{ ok: boolean; order_id?: string }>(`/payments/${encodeURIComponent(order_id)}/upload-proof`, {
+    method: 'POST',
+    body: JSON.stringify({ proof_url }),
+  });
+}
+
+export async function getPayment(order_id: string) {
+  return api<any>(`/payments/${encodeURIComponent(order_id)}`);
+}
+
+export async function listMessages(convoId: string, beforeId?: string, limit = 50) {
+  const params = new URLSearchParams();
+  if (beforeId) params.set("beforeId", beforeId);
+  if (limit) params.set("limit", String(limit));
+  return api<{ items: ChatMessage[] }>(`/chats/${convoId}/messages?${params.toString()}`);
+}
+
+export async function sendMessage(convoId: string, senderId: string, text?: string, imageUrl?: string) {
+  return api<{ id: string }>(`/chats/${convoId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ senderId, text, imageUrl }),
+  });
+}
+
+export async function markRead(convoId: string, readerId: string) {
+  return api<{ ok: boolean }>(`/chats/${convoId}/read`, {
+    method: "POST",
+    body: JSON.stringify({ readerId }),
+  });
+}
+
+export async function listConversations(userId: string, cursor?: string, limit = 20) {
+  const params = new URLSearchParams({ userId, limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return api<{ items: Conversation[] }>(`/chats/conversations?${params.toString()}`);
+}
+
+export async function uploadChatImage(convoId: string, senderId: string, image_base64: string) {
+  return api<{ id: string; imageUrl: string }>(`/chats/${convoId}/attachments`, {
+    method: "POST",
+    body: JSON.stringify({ senderId, image_base64 }),
+  });
+}
+
+// WebSocket helpers for chat
+export type ChatWsEvent =
+  | { type: 'new_message'; convoId: string; message: ChatMessage }
+  | { type: 'typing'; convoId: string; userId: string; isTyping: boolean }
+  | { type: 'read'; convoId: string; readerId: string };
+
+// Payment events emitted by the server over the chat websocket
+export type ChatPaymentStarted = {
+  type: 'payment.started';
+  convoId: string;
+  message: ChatMessage & { type: 'payment'; paymentId: string; meta: any; status: string };
+};
+
+export type ChatPaymentUpdated = {
+  type: 'payment.updated';
+  convoId: string;
+  message: { id: string; paymentId: string; status: string; providerInfo?: any };
+};
+
+export type ChatWsEventAll = ChatWsEvent | ChatPaymentStarted | ChatPaymentUpdated;
+
+export function openChatWebSocket(convoId: string, userId?: string): WebSocket {
+  // Prefer ws(s) based on API_BASE
+  const url = new URL(API_BASE);
+  const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  // backend router mounted at /chats, ws route at /ws/{convoId}
+  const wsUrl = `${wsProto}//${url.host}/chats/ws/${encodeURIComponent(convoId)}${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`;
+  const ws = new WebSocket(wsUrl);
+  return ws;
 }

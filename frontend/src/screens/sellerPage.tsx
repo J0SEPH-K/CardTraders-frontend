@@ -12,38 +12,28 @@ import {
   Platform,
   Alert,
   ScrollView,
-  Animated,
   StatusBar,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { API_BASE, api, createUploadedCard } from "../api/client";
 import SellerCardListItem from "../components/SellerCardListItem";
 import { useAuth } from "@/store/useAuth";
-import { searchTcgDexCards, getTcgDexCard, type TcgDexCardBrief, type TcgDexCard } from "../api/tcgdex";
 import type { CardItem } from "../data/dummy";
 
 type Step =
   | "management"
   | "camera"
   | "confirm-photo"
-  | "pokemon-search"
-  | "description-input"
-  | "title-input" // legacy, kept for non-pokemon flows if needed
-  | "form" // legacy pokemon form, no longer used in new pokemon flow
+  | "manual-input" // new single-page manual input flow
   | "price-input"
   | "preview"
   | "submitting"
   | "done";
 
-type FormStep =
-  | "category"
-  | "region"
-  | "set"
-  | "rarity"
-  | "language"
-  | "description";
+// Removed step-by-step animated form; we now show a single manual input page.
 
 type SellerCard = {
   id: string;
@@ -70,6 +60,7 @@ type Props = {
 
 export default function SellerPage({ openCardPreview }: Props) {
   const user = useAuth((s)=>s.user);
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   // camera
   const cameraRef = useRef<CameraView | null>(null);
@@ -78,7 +69,6 @@ export default function SellerPage({ openCardPreview }: Props) {
 
   // steps
   const [step, setStep] = useState<Step>("management");
-  const [currentFormStep, setCurrentFormStep] = useState<FormStep>("category");
 
   // seller cards management
   const [sellerCards, setSellerCards] = useState<any[]>([]);
@@ -102,16 +92,7 @@ export default function SellerPage({ openCardPreview }: Props) {
   const [cardTitle, setCardTitle] = useState<string>("");
   const [price, setPrice] = useState<string>("");
 
-  // pokemon search state
-  const [pkSearchQuery, setPkSearchQuery] = useState("");
-  const [pkLoading, setPkLoading] = useState(false);
-  const [pkError, setPkError] = useState<string | null>(null);
-  const [pkResults, setPkResults] = useState<TcgDexCardBrief[]>([]);
-  const [pkSelected, setPkSelected] = useState<TcgDexCardBrief | null>(null);
-  const [pkSelectedFull, setPkSelectedFull] = useState<TcgDexCard | null>(null);
-  const [pkDetailLoading, setPkDetailLoading] = useState(false);
-  // track whether user is using API search or manual entry
-  const [entryMode, setEntryMode] = useState<"api" | "manual">("api");
+  // No external search; manual entry only.
 
   // key helpers
   const itemKey = (item: any, idx?: number) =>
@@ -132,9 +113,6 @@ export default function SellerPage({ openCardPreview }: Props) {
     return out;
   };
 
-  // animation for form steps
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
   // dropdown modal for sets/rarity/language
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerTitle, setPickerTitle] = useState("");
@@ -152,102 +130,7 @@ export default function SellerPage({ openCardPreview }: Props) {
     return result;
   }, [catalog, region]);
 
-  // Form step progression logic
-  const getNextFormStep = (current: FormStep): FormStep | null => {
-    const steps: FormStep[] = ["category", "region", "set", "rarity", "language", "description"];
-    const currentIndex = steps.indexOf(current);
-    return currentIndex < steps.length - 1 ? steps[currentIndex + 1] : null;
-  };
-
-  const shouldShowFormStep = (targetStep: FormStep): boolean => {
-    const steps: FormStep[] = ["category", "region", "set", "rarity", "language", "description"];
-    const targetIndex = steps.indexOf(targetStep);
-    const currentIndex = steps.indexOf(currentFormStep);
-    return targetIndex <= currentIndex;
-  };
-
-  const isFormStepComplete = (targetStep: FormStep): boolean => {
-    switch (targetStep) {
-      case "category": return !!category;
-      case "region": return !!region;
-      case "set": return !!setName;
-      case "rarity": return !!rarity;
-      case "language": return !!language;
-      case "description": return description.trim().length > 0;
-      default: return false;
-    }
-  };
-
-  const proceedToNextFormStep = () => {
-    const next = getNextFormStep(currentFormStep);
-    if (next) {
-      setCurrentFormStep(next);
-      // Trigger fade animation
-      Animated.sequence([
-        Animated.timing(fadeAnim, { duration: 150, toValue: 0, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { duration: 300, toValue: 1, useNativeDriver: true }),
-      ]).start();
-    } else {
-      // Form complete, go to price input
-      setStep("price-input");
-    }
-  };
-
-  // Reset subsequent steps when an earlier step changes
-  const resetSubsequentSteps = (changedStep: FormStep) => {
-    const steps: FormStep[] = ["category", "region", "set", "rarity", "language", "description"];
-    const changedIndex = steps.indexOf(changedStep);
-    
-    // Reset all steps after the changed one, but preserve description content
-    for (let i = changedIndex + 1; i < steps.length; i++) {
-      const stepToReset = steps[i];
-      switch (stepToReset) {
-        case "region":
-          setRegion(null);
-          break;
-        case "set":
-          setSetName(null);
-          break;
-        case "rarity":
-          setRarity(null);
-          break;
-        case "language":
-          setLanguage(null);
-          break;
-        case "description":
-          // Don't reset description content - preserve user's input
-          break;
-      }
-    }
-    
-    // Always set current step to the step immediately after the changed step
-    const nextStepIndex = changedIndex + 1;
-    if (nextStepIndex < steps.length) {
-      setCurrentFormStep(steps[nextStepIndex]);
-    } else {
-      // If we're at the last step, stay there
-      setCurrentFormStep(changedStep);
-    }
-    
-    // Trigger fade animation for the new current step
-    Animated.sequence([
-      Animated.timing(fadeAnim, { duration: 150, toValue: 0, useNativeDriver: true }),
-      Animated.timing(fadeAnim, { duration: 300, toValue: 1, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const getNextIncompleteStep = (fromStep: FormStep): FormStep | null => {
-    const steps: FormStep[] = ["category", "region", "set", "rarity", "language", "description"];
-    const fromIndex = steps.indexOf(fromStep);
-    
-    for (let i = fromIndex + 1; i < steps.length; i++) {
-      const step = steps[i];
-      if (!isFormStepComplete(step)) {
-        return step;
-      }
-    }
-    return null;
-  };
+  // Removed step-by-step logic and animations; manual page shows all inputs together.
 
   // Reset form when starting new card
   const resetForm = () => {
@@ -259,15 +142,10 @@ export default function SellerPage({ openCardPreview }: Props) {
     setDescription("");
     setCardTitle("");
     setPrice("");
-    setCurrentFormStep("category");
     setPhotoUri(null);
-    fadeAnim.setValue(1);
   };
 
-  useEffect(() => {
-    // Initialize fade animation
-    fadeAnim.setValue(1);
-  }, []);
+  // No animation initialization required.
   // Load current user's uploaded cards for management list
   const reloadSellerCards = async () => {
     if (!user?.userId) return;
@@ -354,63 +232,26 @@ export default function SellerPage({ openCardPreview }: Props) {
 
   const cardForPreview: CardItem | null = useMemo(() => {
     if (!photoUri || !price) return null;
-    // Prefer selected Pokemon card when available
-    const titleFromSelection = pkSelectedFull
-      ? pkSelectedFull.name
-      : pkSelected
-      ? pkSelected.name
-      : cardTitle;
-    if (!titleFromSelection) return null;
-    // For manual mode, require at least rarity or set or language to avoid empty metadata
-    if (!pkSelected && entryMode === "manual" && !rarity && !setName && !language) {
-      return null;
-    }
+    const titleFromInput = cardTitle?.trim();
+    if (!titleFromInput) return null;
     const pokemonInfo: any = {};
-    if (pkSelectedFull) {
-      if (pkSelectedFull.name) pokemonInfo.cardName = pkSelectedFull.name;
-      if (pkSelectedFull.localId) pokemonInfo.cardNumber = String(pkSelectedFull.localId);
-      if (pkSelectedFull.set?.name) pokemonInfo.set = pkSelectedFull.set.name;
-      if (pkSelectedFull.rarity) pokemonInfo.rarity = pkSelectedFull.rarity;
-  pokemonInfo.game = "Pokemon TCG";
-  // Language from selection or region fallback (ko for Korean sets, else en)
-  pokemonInfo.language = language || (region === "korean" ? "ko" : "en");
-      // New fields
-      if (pkSelectedFull.id) pokemonInfo.cardId = pkSelectedFull.id;
-      // Variants can be object of flags or string array; normalize to string list
-      if (Array.isArray(pkSelectedFull.variants)) {
-        pokemonInfo.variants = pkSelectedFull.variants as any;
-      } else if (pkSelectedFull.variants && typeof pkSelectedFull.variants === "object") {
-        const keys = Object.keys(pkSelectedFull.variants as Record<string, boolean>).filter(
-          (k) => (pkSelectedFull.variants as Record<string, boolean>)[k]
-        );
-        if (keys.length) pokemonInfo.variants = keys;
-      }
-    } else if (pkSelected) {
-      if (pkSelected.name) pokemonInfo.cardName = pkSelected.name;
-      if (pkSelected.localId) pokemonInfo.cardNumber = String(pkSelected.localId);
-      if (pkSelected.id) pokemonInfo.cardId = pkSelected.id;
-      if (pkSelected.set?.name) pokemonInfo.set = pkSelected.set.name;
-      if (pkSelected.rarity) pokemonInfo.rarity = pkSelected.rarity as any;
-      // Apply language from selection or region
-      pokemonInfo.language = language || (region === "korean" ? "ko" : "en");
-    } else {
-      if (rarity) pokemonInfo.rarity = rarity;
-      if (setName) pokemonInfo.set = setName;
-      if (language) pokemonInfo.language = language as any;
-    }
+    if (rarity) pokemonInfo.rarity = rarity;
+    if (setName) pokemonInfo.set = setName;
+    if (language) pokemonInfo.language = language as any;
+    pokemonInfo.game = "Pokemon TCG";
+    if (!pokemonInfo.language) pokemonInfo.language = region === "korean" ? "ko" : "en";
     return {
       id: "temp",
       imageUrl: photoUri,
-      title: titleFromSelection,
+      title: titleFromInput,
       description,
       price: parseFloat(price) || 0,
       category: "pokemon",
       data: [],
-      // Set upload date to now for preview; backend will assign actual on submit
       uploadDate: new Date().toISOString(),
       pokemon: pokemonInfo,
     } as CardItem;
-  }, [photoUri, price, pkSelected, pkSelectedFull, cardTitle, description, rarity, setName, language]);
+  }, [photoUri, price, cardTitle, description, rarity, setName, language, region]);
 
   const submit = async () => {
     setStep("submitting");
@@ -418,19 +259,14 @@ export default function SellerPage({ openCardPreview }: Props) {
       // Build payload for uploadedCards
       const payload: any = {
         category: "pokemon",
-        card_name: cardTitle || pkSelectedFull?.name || pkSelected?.name || "Pokemon Card",
-        rarity: pkSelectedFull?.rarity || rarity || undefined,
-        variants: (Array.isArray(pkSelectedFull?.variants)
-          ? pkSelectedFull?.variants
-          : pkSelectedFull?.variants && typeof pkSelectedFull?.variants === "object"
-            ? Object.keys(pkSelectedFull?.variants as any).filter(k => (pkSelectedFull?.variants as any)[k])
-            : undefined) || undefined,
-  language: language || (region === "korean" ? "ko" : "en"),
-        set: pkSelectedFull?.set?.name || setName || undefined,
-  // Use TCGdex global id for card_num (e.g., "swsh3-136")
-  card_num: pkSelectedFull?.id ?? pkSelected?.id ?? undefined,
+        card_name: cardTitle?.trim() || undefined,
+        rarity: rarity || undefined,
+        variants: undefined,
+        language: language || (region === "korean" ? "ko" : "en"),
+        set: setName || undefined,
+        card_num: undefined,
         price: parseFloat(price) || 0,
-        description: description || undefined,
+        description: description?.trim() || undefined,
         uploadDate: new Date().toISOString(),
         uploadedBy: user?.userId || undefined,
       };
@@ -479,7 +315,7 @@ export default function SellerPage({ openCardPreview }: Props) {
       );
     } catch (e: any) {
       Alert.alert("업로드 실패", e?.message || "다시 시도해 주세요.");
-      setStep("preview");
+  setStep("preview");
     }
   };
 
@@ -541,6 +377,7 @@ export default function SellerPage({ openCardPreview }: Props) {
   }, [pickerOptions, pickerQuery]);
 
   const wordsCount = useMemo(() => description.trim().split(/\s+/).filter(Boolean).length, [description]);
+  const hasDescription = useMemo(() => description.trim().length > 0, [description]);
 
   // UI blocks
   const CameraOverlay = () => (
@@ -585,6 +422,12 @@ export default function SellerPage({ openCardPreview }: Props) {
               >
                 <Text style={styles.addBtnText}>카드 판매</Text>
               </Pressable>
+              <Pressable
+                style={[styles.addBtn, { marginLeft: 8, backgroundColor: '#f93414' }]}
+                onPress={() => navigation.navigate('AdvertiseSetup' as any)}
+              >
+                <Text style={[styles.addBtnText, { color: '#fff' }]}>홍보하기</Text>
+              </Pressable>
             </View>
             <FlatList
               data={sellerCards}
@@ -596,13 +439,14 @@ export default function SellerPage({ openCardPreview }: Props) {
                   const parsed = Number(item.price.replace(/,/g, "").trim());
                   if (Number.isFinite(parsed)) priceNum = parsed;
                 }
-                const rawTitle = item.card_name || item.title || `${item.category} card`;
-                const cleanTitle = String(rawTitle).replace(/\s*#\d+\b/g, "");
+                const rawTitle = item.card_name || item.title || "";
+                const cleanTitle = (rawTitle ? String(rawTitle).replace(/\s*#\d+\b/g, "") : "정보 없음");
                 return (
                   <SellerCardListItem
                     imageUrl={item.image_url ? `${API_BASE}${item.image_url}` : "https://placehold.co/100x130"}
                     title={cleanTitle}
-                    description={item.description || (item.set ? `${item.set}${item.card_num ? ` • ${item.card_num}` : ""}` : "")}
+                    description={(item.description && String(item.description).trim()) ||
+                      ((item.set || item.card_num) ? `${item.set ?? ""}${item.card_num ? ` • ${item.card_num}` : ""}` : "정보 없음")}
                     price={priceNum}
                     onPress={() => {}}
                   />
@@ -639,136 +483,16 @@ export default function SellerPage({ openCardPreview }: Props) {
             <Pressable style={styles.secondaryBtn} onPress={() => setStep("camera")}> 
               <Text style={styles.secondaryBtnText}>다시 촬영</Text>
             </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={() => { setEntryMode("api"); setPkSelected(null); setPkSelectedFull(null); setStep("pokemon-search"); }}>
+            <Pressable style={styles.primaryBtn} onPress={() => { setStep("manual-input"); }}>
               <Text style={styles.primaryBtnText}>확인</Text>
             </Pressable>
           </View>
         </View>
       )}
-
-      {step === "pokemon-search" && (
-        <View style={[styles.flex1, styles.pad16]}>
-          <Text style={styles.title}>포켓몬 카드 검색</Text>
-          <Text style={styles.helper}>예: pikachu ex</Text>
-          <View style={styles.searchRow}>
-            <TextInput
-              value={pkSearchQuery}
-              onChangeText={setPkSearchQuery}
-              placeholder="카드명을 입력하세요"
-              style={[styles.titleInput, { flex: 1 }]}
-              autoFocus
-              autoCapitalize="none"
-            />
-            <Pressable
-              style={[styles.primaryBtn, { marginLeft: 8 }]}
-              onPress={async () => {
-                try {
-                  setPkLoading(true);
-                  setPkError(null);
-                  const ctrl = new AbortController();
-                  const data = await searchTcgDexCards(pkSearchQuery, 1, 30, "en", ctrl.signal);
-                  setPkResults(data);
-                } catch (e: any) {
-                  setPkError(e?.message || "검색에 실패했습니다.");
-                } finally {
-                  setPkLoading(false);
-                }
-              }}
-            >
-              <Text style={styles.primaryBtnText}>검색</Text>
-            </Pressable>
-          </View>
-          {pkError ? <Text style={[styles.helper, { color: "#DC2626" }]}>{pkError}</Text> : null}
-          {pkLoading ? (
-            <View style={[styles.center, { marginTop: 16 }]}><ActivityIndicator /></View>
-          ) : (
-            <FlatList
-              data={pkResults}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.resultItem}
-                  onPress={async () => {
-                    setPkDetailLoading(true);
-                    setPkError(null);
-                    try {
-                      const full = await getTcgDexCard(item.id, "en");
-                      setPkSelected(item);
-                      setPkSelectedFull(full);
-                      setEntryMode("api");
-                      const t = `${full.name}`;
-                      setCardTitle(t);
-                      setStep("description-input");
-                    } catch (e: any) {
-                      // fallback to brief on error
-                      setPkSelected(item);
-                      setPkSelectedFull(null);
-                      setEntryMode("api");
-                      const t = `${item.name}`;
-                      setCardTitle(t);
-                      setStep("description-input");
-                      setPkError(e?.message || "상세 정보를 불러오지 못했습니다.");
-                    } finally {
-                      setPkDetailLoading(false);
-                    }
-                  }}
-                >
-                  <View style={styles.resultThumbWrap}>
-                    {item.image ? (
-                      <Image source={{ uri: item.image }} style={styles.resultThumb} />
-                    ) : (
-                      <View style={[styles.resultThumb, { backgroundColor: "#E5E7EB" }]} />
-                    )}
-                  </View>
-                  <View style={styles.resultMeta}>
-                    <Text style={styles.resultTitle}>{item.name}</Text>
-                    <View style={styles.tagRow}>
-                      <View style={styles.tag}><Text style={styles.tagText}>{item.id}</Text></View>
-                      {item.set?.name ? (
-                        <View style={styles.tag}><Text style={styles.tagText}>{item.set.name}</Text></View>
-                      ) : null}
-                      {item.rarity ? (
-                        <View style={styles.tag}><Text style={styles.tagText}>{item.rarity}</Text></View>
-                      ) : null}
-                    </View>
-                  </View>
-                </Pressable>
-              )}
-              ItemSeparatorComponent={() => <View style={styles.sep} />}
-              style={{ marginTop: 12 }}
-            />
-          )}
-          {pkDetailLoading ? (
-            <View style={[styles.center, { marginTop: 8 }]}>
-              <ActivityIndicator />
-              <Text style={styles.helper}>카드 상세 불러오는 중...</Text>
-            </View>
-          ) : null}
-          <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => setStep("confirm-photo")}>
-              <Text style={styles.secondaryBtnText}>이전</Text>
-            </Pressable>
-            <Pressable
-              style={styles.secondaryBtn}
-              onPress={() => {
-                // Switch to manual entry flow
-                setPkSelected(null);
-                setPkSelectedFull(null);
-                setEntryMode("manual");
-                setCardTitle("");
-                setCurrentFormStep("category");
-                setStep("title-input");
-              }}
-            >
-              <Text style={styles.secondaryBtnText}>찾는 카드가 없나요? 직접 입력</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
-      {step === "title-input" && (
-        <View style={[styles.flex1, styles.pad16]}>
-          <Text style={styles.title}>카드 이름 입력</Text>
+      {step === "manual-input" && (
+        <ScrollView style={styles.flex1} contentContainerStyle={styles.formContent}>
+          <Text style={styles.title}>상품명 (*)</Text>
+          {/* Card Title at top */}
           <TextInput
             value={cardTitle}
             onChangeText={setCardTitle}
@@ -776,222 +500,77 @@ export default function SellerPage({ openCardPreview }: Props) {
             style={styles.titleInput}
             autoFocus
           />
+          {/* Region selection */}
+          <Text style={[styles.stepTitle, { marginTop: 16 }]}>발매 언어</Text>
           <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => { setEntryMode("api"); setPkSelected(null); setPkSelectedFull(null); setStep("pokemon-search"); }}>
-              <Text style={styles.secondaryBtnText}>이전</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.primaryBtn, { opacity: cardTitle.trim().length === 0 ? 0.5 : 1 }]}
-              disabled={cardTitle.trim().length === 0}
-              onPress={() => { setCurrentFormStep("category"); setStep("form"); }}
+            <Pressable 
+              style={[styles.optionBtn, region === "korean" && styles.optionBtnSelected]}
+              onPress={() => setRegion("korean")}
             >
-              <Text style={styles.primaryBtnText}>다음</Text>
+              <Text style={styles.optionText}>한국어</Text>
+            </Pressable>
+            <Pressable 
+              style={[styles.optionBtn, region === "english" && styles.optionBtnSelected]}
+              onPress={() => setRegion("english")}
+            >
+              <Text style={styles.optionText}>영어</Text>
             </Pressable>
           </View>
-        </View>
-      )}
 
-      {step === "description-input" && (
-        <View style={[styles.flex1, styles.pad16]}>
-          <Text style={styles.title}>상세 설명 (최대 500 단어)</Text>
+          {/* Set selection */}
+          <Text style={[styles.stepTitle, { marginTop: 16 }]}>세트</Text>
+          {loadingCatalog ? (
+            <ActivityIndicator />
+          ) : catalogError ? (
+            <Text style={styles.errorText}>{catalogError}</Text>
+          ) : (
+            <Pressable
+              style={[styles.selectBtn, setName && styles.selectBtnSelected]}
+              onPress={() =>
+                openPicker(
+                  "세트 검색",
+                  regionSets,
+                  (v) => { setSetName(v); setPickerVisible(false); },
+                  true
+                )
+              }
+            >
+              <Text style={styles.selectBtnText}>{setName || "세트 검색 및 선택"}</Text>
+            </Pressable>
+          )}
+
+          {/* Rarity */}
+          <Text style={[styles.stepTitle, { marginTop: 16 }]}>카드 레어리티</Text>
+          <Pressable
+            style={[styles.selectBtn, rarity && styles.selectBtnSelected]}
+            onPress={() => openPicker("레어리티 선택", catalog?.rarities || [], (v) => { setRarity(v); setPickerVisible(false); })}
+          >
+            <Text style={styles.selectBtnText}>{rarity || "레어리티 선택"}</Text>
+          </Pressable>
+
+          {/* Description */}
+          <Text style={[styles.stepTitle, { marginTop: 16 }]}>상세 설명 (*) (최대 500 단어)</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="상세 설명을 입력하세요"
             style={styles.textArea}
             multiline
-            autoFocus
           />
           <Text style={styles.helper}>{wordsCount} / 500 단어</Text>
-          <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => setStep("pokemon-search")}>
+
+          <View style={[styles.rowGap12, { marginTop: 12 }]}>
+            <Pressable style={styles.secondaryBtn} onPress={() => setStep("confirm-photo")}>
               <Text style={styles.secondaryBtnText}>이전</Text>
             </Pressable>
             <Pressable
-              style={[styles.primaryBtn, { opacity: wordsCount > 500 ? 0.5 : 1 }]}
-              disabled={wordsCount > 500}
+              style={[styles.primaryBtn, { opacity: (cardTitle.trim().length === 0 || !hasDescription || wordsCount > 500) ? 0.5 : 1 }]}
+              disabled={cardTitle.trim().length === 0 || !hasDescription || wordsCount > 500}
               onPress={() => setStep("price-input")}
             >
               <Text style={styles.primaryBtnText}>다음</Text>
             </Pressable>
           </View>
-        </View>
-      )}
-
-      {step === "form" && (
-        <ScrollView style={styles.flex1} contentContainerStyle={styles.formContent}>
-          {/* Category Step */}
-          {shouldShowFormStep("category") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "category" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>카드 컬렉션 카테고리?</Text>
-              <Pressable 
-                style={[styles.optionBtn, isFormStepComplete("category") && styles.optionBtnSelected]} 
-                onPress={() => { 
-                  setCategory("pokemon"); 
-                  if (currentFormStep === "category") {
-                    proceedToNextFormStep();
-                  } else {
-                    // Always reset subsequent steps when clicking category from a later step
-                    resetSubsequentSteps("category");
-                  }
-                }}
-              >
-                <Text style={styles.optionText}>포켓몬</Text>
-              </Pressable>
-              {isFormStepComplete("category") && currentFormStep !== "category" && <Text style={styles.completeIcon}>✓</Text>}
-            </Animated.View>
-          )}
-
-          {/* Region Step */}
-          {shouldShowFormStep("region") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "region" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>한국어/영어 세트 중 선택</Text>
-              <View style={styles.rowGap12}>
-                <Pressable 
-                  style={[styles.optionBtn, region === "korean" && styles.optionBtnSelected]} 
-                  onPress={() => { 
-                    setRegion("korean"); 
-                    if (currentFormStep === "region") {
-                      proceedToNextFormStep();
-                    } else {
-                      // Always reset subsequent steps when clicking region from a later step
-                      resetSubsequentSteps("region");
-                    }
-                  }}
-                >
-                  <Text style={styles.optionText}>한국어 세트</Text>
-                </Pressable>
-                <Pressable 
-                  style={[styles.optionBtn, region === "english" && styles.optionBtnSelected]} 
-                  onPress={() => { 
-                    setRegion("english"); 
-                    if (currentFormStep === "region") {
-                      proceedToNextFormStep();
-                    } else {
-                      // Always reset subsequent steps when clicking region from a later step
-                      resetSubsequentSteps("region");
-                    }
-                  }}
-                >
-                  <Text style={styles.optionText}>영어 세트</Text>
-                </Pressable>
-              </View>
-              {isFormStepComplete("region") && currentFormStep !== "region" && <Text style={styles.completeIcon}>✓</Text>}
-            </Animated.View>
-          )}
-
-          {/* Set Step */}
-          {shouldShowFormStep("set") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "set" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>세트 선택</Text>
-              {loadingCatalog ? (
-                <ActivityIndicator />
-              ) : catalogError ? (
-                <Text style={styles.errorText}>{catalogError}</Text>
-              ) : (
-                <Pressable
-                  style={[styles.selectBtn, setName && styles.selectBtnSelected]}
-                  onPress={() =>
-                    openPicker(
-                      "세트 검색",
-                      regionSets,
-                      (v) => {
-                        setSetName(v);
-                        setPickerVisible(false);
-                        if (currentFormStep === "set") {
-                          proceedToNextFormStep();
-                        } else {
-                          // Always reset subsequent steps when changing set from a later step
-                          resetSubsequentSteps("set");
-                        }
-                      },
-                      true
-                    )
-                  }
-                >
-                  <Text style={styles.selectBtnText}>{setName || "세트 검색 및 선택"}</Text>
-                </Pressable>
-              )}
-              {isFormStepComplete("set") && currentFormStep !== "set" && <Text style={styles.completeIcon}>✓</Text>}
-            </Animated.View>
-          )}
-
-          {/* Rarity Step */}
-          {shouldShowFormStep("rarity") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "rarity" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>카드 레어리티</Text>
-              <Pressable
-                style={[styles.selectBtn, rarity && styles.selectBtnSelected]}
-                onPress={() =>
-                  openPicker("레어리티 선택", catalog?.rarities || [], (v) => { 
-                    setRarity(v); 
-                    setPickerVisible(false); 
-                    if (currentFormStep === "rarity") {
-                      proceedToNextFormStep();
-                    } else {
-                      // Always reset subsequent steps when changing rarity from a later step
-                      resetSubsequentSteps("rarity");
-                    }
-                  })
-                }
-              >
-                <Text style={styles.selectBtnText}>{rarity || "레어리티 선택"}</Text>
-              </Pressable>
-              {isFormStepComplete("rarity") && currentFormStep !== "rarity" && <Text style={styles.completeIcon}>✓</Text>}
-            </Animated.View>
-          )}
-
-          {/* Language Step */}
-          {shouldShowFormStep("language") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "language" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>카드 언어</Text>
-              <Pressable
-                style={[styles.selectBtn, language && styles.selectBtnSelected]}
-                onPress={() =>
-                  openPicker("언어 선택", catalog?.languages || [], (v) => { 
-                    setLanguage(v); 
-                    setPickerVisible(false); 
-                    if (currentFormStep === "language") {
-                      proceedToNextFormStep();
-                    } else {
-                      // Always reset subsequent steps when changing language from a later step
-                      resetSubsequentSteps("language");
-                    }
-                  })
-                }
-              >
-                <Text style={styles.selectBtnText}>{language || "언어 선택"}</Text>
-              </Pressable>
-              {isFormStepComplete("language") && currentFormStep !== "language" && <Text style={styles.completeIcon}>✓</Text>}
-            </Animated.View>
-          )}
-
-          {/* Description Step */}
-          {shouldShowFormStep("description") && (
-            <Animated.View style={[styles.formStep, { opacity: currentFormStep === "description" ? fadeAnim : 1 }]}>
-              <Text style={styles.stepTitle}>상세 설명 (최대 500 단어)</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="상세 설명을 입력하세요"
-                style={styles.textArea}
-                multiline
-              />
-              <Text style={styles.helper}>{wordsCount} / 500 단어</Text>
-              {currentFormStep === "description" && (
-                <Pressable
-                  style={[styles.primaryBtn, { opacity: wordsCount > 500 ? 0.5 : 1 }]}
-                  disabled={wordsCount > 500}
-                  onPress={() => setStep("price-input")}
-                >
-                  <Text style={styles.primaryBtnText}>다음</Text>
-                </Pressable>
-              )}
-              {isFormStepComplete("description") && currentFormStep !== "description" && (
-                <Text style={styles.completeIcon}>✓</Text>
-              )}
-            </Animated.View>
-          )}
         </ScrollView>
       )}
 
@@ -1023,12 +602,7 @@ export default function SellerPage({ openCardPreview }: Props) {
             <Pressable
               style={styles.secondaryBtn}
               onPress={() => {
-                if (entryMode === "api") {
-                  setStep("description-input");
-                } else {
-                  setCurrentFormStep("description");
-                  setStep("form");
-                }
+                setStep("manual-input");
               }}
             >
               <Text style={styles.secondaryBtnText}>이전</Text>
@@ -1148,7 +722,7 @@ export default function SellerPage({ openCardPreview }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#FAF9F6" },
   flex1: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
@@ -1188,7 +762,7 @@ const styles = StyleSheet.create({
   selectBtnSelected: { backgroundColor: "#DBEAFE", borderWidth: 2, borderColor: "#3B82F6" },
   selectBtnText: { fontSize: 16, fontWeight: "600", color: "#111827" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalCard: { width: "100%", backgroundColor: "#fff", borderRadius: 16, padding: 16 },
+  modalCard: { width: "100%", backgroundColor: "#FAF9F6", borderRadius: 16, padding: 16 },
   modalTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
   searchInput: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 10, marginBottom: 8 },
   optionItem: { paddingVertical: 10 },
