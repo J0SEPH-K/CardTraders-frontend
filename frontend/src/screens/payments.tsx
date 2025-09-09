@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, Alert } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { updateProfileApi } from '@/api/client';
 import { useAuth } from '@/store/useAuth';
 import { Image } from 'react-native';
 
@@ -37,6 +39,7 @@ const BANK_KEY_TO_NAME: Record<string, string> = {
 export default function PaymentsPage() {
   const navigation = useNavigation();
   const user = useAuth((s)=>s.user);
+  const setUser = useAuth((s)=>s.setUser);
   // derive bank key and account code for display
   const bankRaw = user?.bank_acc || '';
   const detectedKey = Object.keys(BANK_SIGNATURE).find((k) => bankRaw.includes(k) || bankRaw.includes(BANK_KEY_TO_NAME[k]));
@@ -83,8 +86,35 @@ export default function PaymentsPage() {
           <View style={styles.sectionBody}>
             {user?.bank_acc ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <Pressable onPress={async () => {
+                  Alert.alert('계좌 정보 삭제', '등록된 계좌 정보를 삭제하시겠습니까?', [
+                    { text: '취소', style: 'cancel' },
+                    { text: '삭제', style: 'destructive', onPress: async () => {
+                      if (!user) return;
+                      try {
+                        // identify user by userId or id or email
+                        const idPayload: any = {};
+                        if ((user as any).userId) idPayload.userId = (user as any).userId;
+                        else if ((user as any).id) idPayload.id = (user as any).id;
+                        else if ((user as any).email) idPayload.email = (user as any).email;
+                        const resp = await updateProfileApi({ ...idPayload, bank_acc: null });
+                        if (resp && resp.user) {
+                          setUser(resp.user as any);
+                        } else {
+                          // fallback: clear locally
+                          setUser({ ...user, bank_acc: null });
+                        }
+                        Alert.alert('삭제됨', '계좌 정보가 삭제되었습니다.');
+                      } catch (err: any) {
+                        Alert.alert('삭제 실패', err?.message || '서버 삭제 실패');
+                      }
+                    } },
+                  ]);
+                }} style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ef4444' }}>
+                  <MaterialIcons name="delete-outline" size={20} color="#ef4444" />
+                </Pressable>
                 {detectedKey ? (
-                  <Image source={BANK_SIGNATURE[detectedKey]} style={{ width: 220, height: 56, resizeMode: 'contain' }} />
+                  <Image source={BANK_SIGNATURE[detectedKey]} style={{ width: 160, height: 56, resizeMode: 'contain' }} />
                 ) : null}
                 <Text style={{ color: '#111827', marginLeft: 12 }}>{maskedAccount}</Text>
               </View>

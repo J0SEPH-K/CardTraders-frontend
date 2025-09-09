@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Pressable, Text, StyleSheet, ScrollView } from "react-native";
+import { MaterialIcons } from '@expo/vector-icons';
 
 type Category = { key: string; label: string };
 
@@ -11,6 +12,7 @@ type Props = {
 };
 
 const DEFAULT_CATEGORIES: Category[] = [
+  { key: "starred", label: "" },
   { key: "all", label: "전체" },
   { key: "pokemon", label: "포켓몬" },
   { key: "yugioh", label: "유희왕" },
@@ -19,6 +21,15 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 export default function SearchFilterBar({ value, onChange, categories = DEFAULT_CATEGORIES, style }: Props) {
   const selectedKey = value ?? "all";
+
+  // Ensure starred filter exists even if parent passes a custom categories list
+  const effectiveCategories = useMemo(() => {
+    if (!categories) return DEFAULT_CATEGORIES;
+    const hasStarred = categories.some((c) => c.key === 'starred');
+  if (hasStarred) return categories;
+  // prepend the default starred category (keeps its label in sync with DEFAULT_CATEGORIES)
+  return [DEFAULT_CATEGORIES[0], ...categories];
+  }, [categories]);
 
   const handlePress = (key: string) => {
     // toggle: selecting the same key returns to 'all'
@@ -32,7 +43,7 @@ export default function SearchFilterBar({ value, onChange, categories = DEFAULT_
   return (
     <View style={[styles.container, style]}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {categories.map((cat) => {
+  {effectiveCategories.map((cat) => {
           const active = cat.key === selectedKey;
           return (
             <Pressable
@@ -43,7 +54,12 @@ export default function SearchFilterBar({ value, onChange, categories = DEFAULT_
               accessibilityState={{ selected: active }}
               accessibilityLabel={`filter-${cat.key}`}
             >
-              <Text style={[styles.label, active && styles.labelActive]}>{cat.label}</Text>
+              {cat.key === 'starred' ? (
+                // show only a star icon for the starred filter
+                <MaterialIcons name={active ? 'star' : 'star-border'} size={18} color={active ? '#fff' : '#F59E0B'} />
+              ) : (
+                <Text style={[styles.label, active && styles.labelActive]}>{cat.label}</Text>
+              )}
             </Pressable>
           );
         })}
@@ -85,5 +101,8 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: "#fff",
+  },
+  icon: {
+    marginRight: 6,
   },
 });

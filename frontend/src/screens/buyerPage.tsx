@@ -4,6 +4,8 @@ import CardListItem from "../components/CardListItem";
 import SearchBar from "../components/SearchBar";
 import { CATEGORIES } from "../data/dummy";
 import { API_BASE } from "../api/client";
+import { getUploadedCard } from '@/api/client';
+import { useAuth } from '@/store/useAuth';
 
 type Props = {
 	setSelectedCard?: (card: any) => void;
@@ -27,9 +29,30 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 	const load = async () => {
 		try {
 			setLoading(true);
+			// If 'starred' filter is active, load only user's favorite card ids
+			if (selectedCategory === 'starred') {
+				const user = useAuth.getState().user;
+				const favs: string[] = Array.isArray(user?.favorites) ? user!.favorites : (Array.isArray(user?.starred_item) ? user!.starred_item : []);
+				if (!favs || favs.length === 0) {
+					setItems([]);
+					return;
+				}
+				// fetch each favorite by id
+				const promises = favs.map((id) => getUploadedCard(id).catch(() => null));
+				const results = await Promise.all(promises);
+				setItems(results.filter(Boolean) as any[]);
+				return;
+			}
 			const params = new URLSearchParams();
 			if (selectedCategory && selectedCategory !== "all") params.set("category", selectedCategory);
 			if (query.trim()) params.set("q", query.trim());
+			
+			// Add debug_user_id to log user favorites in backend console
+			const user = useAuth.getState().user;
+			if (user?.userId) {
+				params.set("debug_user_id", user.userId);
+			}
+			
 			const r = await fetch(`${API_BASE}/uploaded-cards?${params.toString()}`);
 			if (!r.ok) throw new Error(await r.text());
 			const data = await r.json();
@@ -42,10 +65,12 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 		}
 	};
 
+	const user = useAuth((s) => s.user);
+
 	useEffect(() => {
 		load();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [selectedCategory]);
+	}, [selectedCategory, user?.favorites, user?.starred_item]);
 
 	const handleSearch = () => {
 		// Search runs from query state; no additional action required here.
@@ -136,7 +161,12 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 									onPress={() => toggleCategory(cat.key)}
 									style={[styles.filterButton, active && styles.filterButtonActive]}
 								>
-									<Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{cat.label}</Text>
+									{cat.key === 'starred' ? (
+										// show the star emoji for the starred filter
+										<Text style={[styles.filterLabel, active && styles.filterLabelActive]}>☆</Text>
+									) : (
+										<Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{cat.label}</Text>
+									)}
 								</Pressable>
 							);
 						})}
@@ -160,6 +190,23 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 						const absoluteImageUrl = item.image_url ? `${API_BASE}${item.image_url}` : "https://placehold.co/100x130";
 						return (
 							<CardListItem
+								id={item.id}
+								// mark favorited if this item's id exists in the current user's favorites
+								favorited={(() => {
+									const u = useAuth.getState().user;
+									const favs: string[] = Array.isArray(u?.favorites) ? u!.favorites : (Array.isArray(u?.starred_item) ? u!.starred_item : []);
+									const isFavorited = favs.some((s) => String(s) === String(item.id));
+									
+									// Debug logging for favorites comparison
+									if (typeof __DEV__ !== "undefined" && __DEV__ && item.id && (String(item.id) === '21' || favs.length > 0)) {
+										console.log(`[DEBUG] Card ID: ${item.id} (type: ${typeof item.id})`);
+										console.log(`[DEBUG] Favorites: ${JSON.stringify(favs)}`);
+										console.log(`[DEBUG] Comparing: ${favs.map(f => `'${f}' === '${String(item.id)}' => ${String(f) === String(item.id)}`).join(', ')}`);
+										console.log(`[DEBUG] Is favorited: ${isFavorited}`);
+									}
+									
+									return isFavorited;
+								})()}
 								imageUrl={absoluteImageUrl}
 								title={cleanTitle}
 								description={item.description || (item.set ? `${item.set}${item.card_num ? ` • ${item.card_num}` : ""}` : "")}

@@ -12,7 +12,7 @@ const BANKS = [
   { key: 'NH', name: 'NH농협은행' },
   { key: 'IBK', name: 'IBK기업은행' },
   { key: 'KKB', name: '카카오뱅크' },
-  { key: 'KBANK', name: '케이뱅크' },
+  
   { key: 'Citi', name: '시티은행' },
   { key: 'IM', name: 'iM뱅크' },
   { key: 'SC', name: 'SC제일은행' },
@@ -28,7 +28,6 @@ const BANK_ORIGINAL: Record<string, any> = {
   NH: require('../assets/BankIcons/NH/signature.png'),
   IBK: require('../assets/BankIcons/IBK/signature.png'),
   KKB: require('../assets/BankIcons/KKB/signature.png'),
-  KBANK: require('../assets/BankIcons/KKB/signature.png'),
   Citi: require('../assets/BankIcons/Citi/signature.png'),
   IM: require('../assets/BankIcons/IM/signature.png'),
   SC: require('../assets/BankIcons/SC/signature.png'),
@@ -77,7 +76,6 @@ export default function AddBankAccountPage() {
             <Text style={styles.bankInitial}>{item.key.slice(0, 2)}</Text>
           </View>
         )}
-        <Text style={styles.bankLabel}>{item.name}</Text>
       </Pressable>
     );
   };
@@ -95,7 +93,15 @@ export default function AddBankAccountPage() {
         </View>
 
         <Text style={styles.sectionTitle}>은행 선택</Text>
-        <FlatList data={BANKS} keyExtractor={(i) => i.key} renderItem={renderBank} horizontal={false} numColumns={2} columnWrapperStyle={{ justifyContent: 'space-between' }} style={{ marginBottom: 16 }} />
+        <FlatList
+          data={BANKS}
+          keyExtractor={(i) => i.key}
+          renderItem={renderBank}
+          horizontal={false}
+          numColumns={2}
+          columnWrapperStyle={{ justifyContent: 'space-between', marginBottom: 12 }}
+          style={{ marginBottom: 16 }}
+        />
 
         <Text style={styles.sectionTitle}>계좌번호</Text>
         <TextInput value={account} onChangeText={setAccount} placeholder="계좌번호 입력" style={styles.input} keyboardType="numeric" />
@@ -123,12 +129,12 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: '#111827' },
   title: { fontSize: 18, fontWeight: '600' },
   sectionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  bankBtn: { width: '48%', backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  bankBtn: { width: '43%', backgroundColor: '#fff', borderRadius: 12, padding: 0, marginVertical: 3, alignItems: 'center', justifyContent: 'center', height: 60, borderWidth: 2, borderColor: '#e5e7eb', overflow: 'hidden' },
   bankBtnActive: { borderColor: '#f93414', backgroundColor: '#fff8f8' },
-  bankIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' },
+  bankIcon: { width: '100%', height: '100%', borderRadius: 0, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' },
   bankIconActive: { backgroundColor: '#fef2f2' },
-  bankIconImg: { width: 40, height: 40, borderRadius: 6, backgroundColor: 'transparent' },
-  bankInitial: { fontWeight: '700', color: '#111827' },
+  bankIconImg: { width: '100%', height: '100%', borderRadius: 0, backgroundColor: 'transparent' },
+  bankInitial: { fontWeight: '700', color: '#111827', fontSize: 22 },
   bankLabel: { flex: 1, fontSize: 14, color: '#111827' },
   input: { backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 12 },
   verifyBox: { backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', minHeight: 88 },

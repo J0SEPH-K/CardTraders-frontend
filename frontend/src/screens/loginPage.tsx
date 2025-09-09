@@ -113,6 +113,13 @@ export default function LoginPage() {
 		try {
 			setLoading(true);
 			const { user } = await loginApi(email, password);
+			
+			// Debug logging for login response
+			if (typeof __DEV__ !== "undefined" && __DEV__) {
+				console.log("[DEBUG] Login response user:", JSON.stringify(user, null, 2));
+				console.log("[DEBUG] User favorites from login:", user?.favorites);
+			}
+			
 			setUser(user);
 		} catch (e: any) {
 			const msg = typeof e?.message === "string" ? e.message : "로그인에 실패했습니다.";
@@ -350,7 +357,7 @@ const styles = StyleSheet.create({
 	signupRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
 	errorBanner: { width: "100%", backgroundColor: "#FEE2E2", borderRadius: 12, padding: 12 },
 	errorText: { color: "#B91C1C", fontWeight: "700" },
-	cardLogo: { width: 220, height: 80, alignSelf: 'center', resizeMode: 'contain', marginBottom: 12 },
+	cardLogo: { width: 300, height: 140, alignSelf: 'center', resizeMode: 'contain', marginTop: -40, marginBottom: 60 },
 	socialRowContainer: { width: '100%', alignItems: 'center', justifyContent: 'center' },
 	socialOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 	socialOverlayText: { color: '#374151', fontWeight: '700' },

@@ -84,6 +84,7 @@ export type CardItem = {
 };
 
 export const CATEGORIES = [
+  { key: "starred", label: "" },
   { key: "all", label: "전체" },
   { key: "pokemon", label: "포켓몬" },
   { key: "yugioh", label: "유희왕" },
