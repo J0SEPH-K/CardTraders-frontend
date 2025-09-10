@@ -14,7 +14,7 @@ export default function SearchBar({ value, onChangeText, onSearch, placeholder }
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder ?? "Search"}
+        placeholder={placeholder ?? "검색"}
         returnKeyType="search"
         onSubmitEditing={onSearch}
         style={styles.searchInput}

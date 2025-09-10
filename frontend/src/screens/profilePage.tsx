@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/store/useAuth';
 import { updateProfileApi, API_BASE } from '@/api/client';
 import * as FileSystem from 'expo-file-system';
@@ -99,30 +100,30 @@ export default function ProfilePage() {
 					<View style={styles.cardRight}>
 						<View style={styles.infoSection}>
 							<View style={styles.infoRow}>
-								<Text style={styles.value}>트레이더: </Text>
+								<Text style={styles.label}>트레이더</Text>
 								<Text style={styles.value}>{user?.username ?? '—'}</Text>
 							</View>
 							<View style={styles.infoRow}>
-								<Text style={styles.value}>이메일: </Text>
+								<Text style={styles.label}>이메일</Text>
 								<Text style={styles.value}>{user?.email ?? '—'}</Text>
 							</View>
 							<View style={styles.infoRow}>
-								<Text style={styles.value}>전화번호: </Text>
+								<Text style={styles.label}>전화번호</Text>
 								<Text style={styles.value}>{user?.phone_num ?? '—'}</Text>
 							</View>
 							<View style={styles.infoRow}>
-								<Text style={styles.value}>주소: </Text>
+								<Text style={styles.label}>주소</Text>
 								<Text style={styles.value}>{user?.address ?? '—'}</Text>
 							</View>
 						</View>
 					</View>
 
 					<View style={styles.actionsRow}>
-						<Pressable onPress={handleLogout} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={[styles.chip, styles.secondaryChip]}>
-							<Text style={[styles.chipText, styles.secondaryText]}>로그아웃</Text>
+						<Pressable onPress={handleLogout} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={[styles.iconButton, styles.secondaryButton]}>
+							<Ionicons name="log-out-outline" size={18} color="#6b7280" />
 						</Pressable>
-						<Pressable onPress={() => setShowEdit(true)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={[styles.chip, styles.primaryChip] }>
-							<Text style={[styles.chipText, styles.primaryText]}>프로필 수정</Text>
+						<Pressable onPress={() => setShowEdit(true)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={[styles.iconButton, styles.primaryButton] }>
+							<Ionicons name="create-outline" size={18} color="#ffffff" />
 						</Pressable>
 					</View>
 				</View>
@@ -184,19 +185,19 @@ const styles = StyleSheet.create({
 	headerTitle: { fontSize: 18, fontWeight: '600' },
 	card: {
 		flexDirection: 'row',
-		backgroundColor: '#FAF9F6',
-		borderRadius: 12,
-		padding: 16,
-		minHeight: 180,
+		backgroundColor: '#ffffff',
+		borderRadius: 20,
+		padding: 20,
+		minHeight: 250,
 		alignItems: 'center',
-		borderWidth: 3,
+		borderWidth: 1,
 		borderColor: '#e5e7eb',
 		overflow: 'hidden',
 		shadowColor: '#000',
-		shadowOpacity: 0.06,
-		shadowRadius: 10,
+		shadowOpacity: 0.08,
+		shadowRadius: 12,
 		shadowOffset: { width: 0, height: 4 },
-		elevation: 2,
+		elevation: 3,
 	},
 	accentBar: {
 		position: 'absolute',
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
 	cardLogo: {
 		position: 'absolute',
 		top: 4,
-		right: 4,
+		right: 6,
 		width: 24,
 		height: 24,
 		resizeMode: 'contain',
@@ -218,17 +219,22 @@ const styles = StyleSheet.create({
 		opacity: 0.95,
 	},
 	avatarBox: {
-		width: 96, // scaled down (80% of original) to keep 4:5 ratio
-		height: 120,
+		width: 128, // larger avatar (4:5 ratio)
+		height: 160,
 		justifyContent: 'center',
 		alignItems: 'center',
-		// Pull avatar up to overlap the accent bar like the edit modal
-		marginTop: -10,
-		borderRadius: 12,
+		// Lower the avatar position
+		marginTop: 5,
+		borderRadius: 16,
 		overflow: 'hidden',
-		backgroundColor: '#ffffff',
-		borderWidth: 1,
+		backgroundColor: '#f9fafb',
+		borderWidth: 2,
 		borderColor: '#e5e7eb',
+		shadowColor: '#000',
+		shadowOpacity: 0.06,
+		shadowRadius: 8,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 2,
 	},
 	avatar: {
 		width: '100%',
@@ -237,63 +243,105 @@ const styles = StyleSheet.create({
 		// let the container provide the border and clipping
 		resizeMode: 'cover',
 	},
-	cardRight: { flex: 1, paddingLeft: 32, justifyContent: 'center' }, // center info vertically (adjusted for smaller avatar)
-	infoSection: { gap: 6 },
-	infoRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-	label: { fontSize: 11, color: '#6b7280' },
-	value: { fontSize: 14, color: '#111827' },
+	cardRight: { flex: 1, paddingLeft: 16, justifyContent: 'center' }, // tightened spacing next to avatar
+	infoSection: { gap: 8 },
+	infoRow: { flexDirection: 'column', alignItems: 'flex-start', gap: 2 },
+	label: { fontSize: 11, color: '#6b7280', fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5 },
+	value: { fontSize: 15, color: '#111827', fontWeight: '600' },
 	actionsRow: {
 		position: 'absolute',
-		bottom: 8,
-		right: 8,
+		bottom: 12,
+		right: 12,
 		flexDirection: 'row',
 		justifyContent: 'flex-end',
 		gap: 8,
 	},
-	chip: {
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 999,
-		borderWidth: 1,
+	iconButton: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		justifyContent: 'center',
+		alignItems: 'center',
+		borderWidth: 1.5,
+		shadowColor: '#000',
+		shadowOpacity: 0.08,
+		shadowRadius: 4,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 2,
 	},
-	primaryChip: { borderColor: ACCENT, backgroundColor: '#FAF9F6' },
-	secondaryChip: { borderColor: '#d1d5db', backgroundColor: '#FAF9F6' },
-	chipText: { fontSize: 10 },
-	primaryText: { color: ACCENT, fontWeight: '600' },
-	secondaryText: { color: '#374151' },
+	primaryButton: { 
+		borderColor: ACCENT, 
+		backgroundColor: ACCENT,
+	},
+	secondaryButton: { 
+		borderColor: '#e5e7eb', 
+		backgroundColor: '#ffffff',
+	},
+	chip: {
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 20,
+		borderWidth: 1.5,
+		shadowColor: '#000',
+		shadowOpacity: 0.08,
+		shadowRadius: 4,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 2,
+	},
+	primaryChip: { 
+		borderColor: ACCENT, 
+		backgroundColor: ACCENT,
+	},
+	secondaryChip: { 
+		borderColor: '#e5e7eb', 
+		backgroundColor: '#ffffff',
+	},
+	chipText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+	primaryText: { color: '#ffffff' },
+	secondaryText: { color: '#6b7280' },
 
 	listButton: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		paddingHorizontal: 16,
-		paddingVertical: 16,
-		borderRadius: 12,
-		backgroundColor: '#FAF9F6',
+		paddingHorizontal: 20,
+		paddingVertical: 18,
+		borderRadius: 16,
+		backgroundColor: '#ffffff',
 		borderWidth: 1,
 		borderColor: '#e5e7eb',
+		shadowColor: '#000',
+		shadowOpacity: 0.04,
+		shadowRadius: 6,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 1,
 	},
-	listButtonText: { fontSize: 16, color: '#111827' },
-	listButtonArrow: { fontSize: 22, color: '#9ca3af' },
+	listButtonText: { fontSize: 16, color: '#111827', fontWeight: '600' },
+	listButtonArrow: { fontSize: 20, color: '#9ca3af', fontWeight: '300' },
 
 	group: {
-		backgroundColor: '#FAF9F6',
-		borderRadius: 12,
+		backgroundColor: '#ffffff',
+		borderRadius: 16,
 		borderWidth: 1,
 		borderColor: '#e5e7eb',
 		overflow: 'hidden',
+		shadowColor: '#000',
+		shadowOpacity: 0.04,
+		shadowRadius: 6,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 1,
 	},
 	groupItem: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		paddingHorizontal: 16,
-		paddingVertical: 16,
-		backgroundColor: '#FAF9F6',
+		paddingHorizontal: 20,
+		paddingVertical: 18,
+		backgroundColor: '#ffffff',
 	},
-	groupTop: { borderTopLeftRadius: 12, borderTopRightRadius: 12 },
-	groupBottom: { borderBottomLeftRadius: 12, borderBottomRightRadius: 12 },
-	groupDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#e5e7eb' },
-	groupText: { fontSize: 16, color: '#111827' },
+	groupTop: { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+	groupBottom: { borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+	groupDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#f3f4f6', marginLeft: 20 },
+	groupText: { fontSize: 16, color: '#111827', fontWeight: '500' },
 });
 

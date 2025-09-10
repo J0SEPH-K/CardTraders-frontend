@@ -20,7 +20,12 @@ function resolveApiBase(): string {
   return "http://localhost:8000";
 }
 
-export const API_BASE = resolveApiBase();
+export let API_BASE = resolveApiBase();
+export function setApiBase(url: string) {
+  if (typeof url === 'string' && url.length) {
+    API_BASE = url;
+  }
+}
 
 const API_TIMEOUT_MS = Number((process as any)?.env?.EXPO_PUBLIC_API_TIMEOUT_MS || 12000);
 
@@ -35,7 +40,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, abort: () => void): Promise<T
 }
 
 export async function api<T>(path: string, init?: RequestInit) {
-  const url = `${API_BASE}${path}`;
+  // Normalize to avoid double slashes when API_BASE ends with '/' and path starts with '/'
+  const base = API_BASE.replace(/\/+$/, "");
+  const pth = path.startsWith("/") ? path : `/${path}`;
+  const url = `${base}${pth}`;
   if (typeof __DEV__ !== "undefined" && __DEV__) {
     // Log once per call to help diagnose device networking
     // eslint-disable-next-line no-console
@@ -128,11 +136,17 @@ export async function updateProfileApi(payload: {
   username?: string;
   phone_num?: string;
   address?: string;
+  // Favorites array of item ids
+  favorites?: string[] | null;
   // One of the following for avatar; image_base64 takes precedence if provided
   image_base64?: string | null;
   pfp_url?: string | null;
 }): Promise<LoginResponse> {
   return api<LoginResponse>(`/auth/update-profile`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function acceptTermsAndConditions(userId: string): Promise<LoginResponse> {
+  return api<LoginResponse>(`/auth/accept-terms`, { method: "POST", body: JSON.stringify({ userId, terms_and_conditions: true }) });
 }
 
 // Uploaded cards API
@@ -162,6 +176,13 @@ export async function getUploadedCard(id: string | number) {
 
 export async function advertiseUploadedCard(id: string | number) {
   return api<any>(`/uploaded-cards/${encodeURIComponent(String(id))}/advertise`, { method: 'POST' });
+}
+
+export async function updateUploadedCard(id: string | number, payload: Partial<CreateUploadedCardPayload>) {
+  return api<any>(`/uploaded-cards/${encodeURIComponent(String(id))}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(payload) 
+  });
 }
 
 // Chat API
@@ -205,10 +226,6 @@ export async function createOrder(payload: { buyer_id: string; seller_id: string
   });
 }
 
-export async function openBankingStart(payment_id: string) {
-  return api<{ auth_url: string }>(`/payments/openbanking/start/${encodeURIComponent(payment_id)}`);
-}
-
 export async function reconcileTransaction(tx: { tx_id: string; amount: number; description?: string; payer_name?: string }) {
   return api<{ matched_order_id?: string; matched: boolean; reason?: string }>(`/payments/reconcile`, {
     method: 'POST',
@@ -220,6 +237,14 @@ export async function uploadProof(order_id: string, proof_url: string) {
   return api<{ ok: boolean; order_id?: string }>(`/payments/${encodeURIComponent(order_id)}/upload-proof`, {
     method: 'POST',
     body: JSON.stringify({ proof_url }),
+  });
+}
+
+// Mark a payment as pending (created by user after uploading proof / indicating transfer)
+export async function startPending(order_id: string, payload: { tierId?: string; note?: string } = {}) {
+  return api<{ ok: boolean; order_id?: string }>(`/payments/${encodeURIComponent(order_id)}/pending`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
@@ -284,7 +309,7 @@ export type ChatWsEventAll = ChatWsEvent | ChatPaymentStarted | ChatPaymentUpdat
 
 export function openChatWebSocket(convoId: string, userId?: string): WebSocket {
   // Prefer ws(s) based on API_BASE
-  const url = new URL(API_BASE);
+  const url = new URL(API_BASE.replace(/\/+$/, ''));
   const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
   // backend router mounted at /chats, ws route at /ws/{convoId}
   const wsUrl = `${wsProto}//${url.host}/chats/ws/${encodeURIComponent(convoId)}${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`;

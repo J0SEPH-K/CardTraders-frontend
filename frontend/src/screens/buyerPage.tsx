@@ -20,6 +20,7 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 	// Fixed overlay header under the app title; list pulls-to-refresh beneath it
 	const headerTranslateY = useRef(new Animated.Value(0)).current;
 	const [headerHeight, setHeaderHeight] = useState(0);
+	const spacerHeight = Math.max(headerHeight, 92); // fallback so first item is never covered before measurement
 	const lastY = useRef(0);
 	const isHidden = useRef(false);
 	const upAccum = useRef(0);
@@ -177,6 +178,8 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 			<FlatList
 				data={displayed}
 				keyExtractor={(item) => String(item.id)}
+				ListHeaderComponent={<View style={{ height: spacerHeight }} />}
+					extraData={{ favs: user?.favorites ?? user?.starred_item, category: selectedCategory }}
 					renderItem={({ item }) => {
 						let priceNum = 0;
 						if (typeof item.price === 'number') {
@@ -231,15 +234,15 @@ export default function BuyerPage({ setSelectedCard }: Props) {
 					<RefreshControl
 						refreshing={loading}
 						onRefresh={load}
-						progressViewOffset={Platform.OS === 'android' ? headerHeight : 0}
+						progressViewOffset={Platform.OS === 'android' ? spacerHeight : 0}
 					/>
 				}
 				onScroll={onScroll}
 				onScrollBeginDrag={onScrollBeginDrag}
 				onScrollEndDrag={onScrollEndDrag}
 				showsVerticalScrollIndicator={false}
-					contentContainerStyle={{ paddingBottom: 24, paddingTop: Platform.OS === 'android' ? headerHeight : 0 }}
-					{...(Platform.OS === 'ios' ? { contentInset: { top: headerHeight }, scrollIndicatorInsets: { top: headerHeight } } : {})}
+					contentContainerStyle={{ paddingBottom: 24 }}
+					{...(Platform.OS === 'ios' ? { scrollIndicatorInsets: { top: spacerHeight } } : {})}
 			/>
 		</View>
 	);

@@ -20,6 +20,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { API_BASE, api, createUploadedCard } from "../api/client";
 import SellerCardListItem from "../components/SellerCardListItem";
+import SellerCardDetailModal from "../components/SellerCardDetailModal";
 import { useAuth } from "@/store/useAuth";
 import type { CardItem } from "../data/dummy";
 
@@ -69,6 +70,7 @@ export default function SellerPage({ openCardPreview }: Props) {
 
   // steps
   const [step, setStep] = useState<Step>("management");
+  // preview is rendered as a full-screen modal in this step
 
   // seller cards management
   const [sellerCards, setSellerCards] = useState<any[]>([]);
@@ -87,6 +89,8 @@ export default function SellerPage({ openCardPreview }: Props) {
   const [region, setRegion] = useState<"english" | "korean" | null>(null);
   const [setName, setSetName] = useState<string | null>(null);
   const [rarity, setRarity] = useState<string | null>(null);
+  const [qualityRating, setQualityRating] = useState<string | null>(null);
+  const [qualityScale, setQualityScale] = useState<string | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [description, setDescription] = useState<string>("");
   const [cardTitle, setCardTitle] = useState<string>("");
@@ -120,6 +124,10 @@ export default function SellerPage({ openCardPreview }: Props) {
   const [pickerOptions, setPickerOptions] = useState<string[]>([]);
   const [pickerOnSelect, setPickerOnSelect] = useState<(value: string) => void>(() => () => {});
 
+  // seller card detail modal
+  const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [cardDetailVisible, setCardDetailVisible] = useState(false);
+
   // preview modal controlled by parent via openCardPreview
 
   const regionSets = useMemo(() => {
@@ -138,6 +146,8 @@ export default function SellerPage({ openCardPreview }: Props) {
     setRegion(null);
     setSetName(null);
     setRarity(null);
+    setQualityRating(null);
+    setQualityScale(null);
     setLanguage(null);
     setDescription("");
     setCardTitle("");
@@ -210,6 +220,80 @@ export default function SellerPage({ openCardPreview }: Props) {
     }
   }, [permission]);
 
+// Static fallback catalog data (same as SellerCardDetailModal)
+const STATIC_CATALOG: PokemonCatalog = {
+  rarities: [
+    "Promo", "Common", "Uncommon", "Rare", "Rare Holo", "Rare Holo EX",
+    "Rare Holo GX", "Ultra Rare", "Radiant Rare", "Art Rare", "Special Art Rare", 
+    "Shiny Rare", "Shiny Ultra Rare", "Hyper Rare", "Amazing"
+  ],
+  languages: ["Japanese", "English", "Korean", "French", "German", "Italian"],
+  sets: {
+    english: { 
+      series: [
+        { name: "Original", sets: ["Base Set", "Jungle", "Fossil", "Team Rocket"] },
+        { name: "Neo", sets: ["Neo Genesis", "Neo Discovery", "Neo Revelation", "Neo Destiny"] },
+        { name: "EX", sets: ["EX Ruby & Sapphire", "EX FireRed & LeafGreen", "EX Emerald"] },
+        { name: "Diamond & Pearl", sets: ["Diamond & Pearl", "Mysterious Treasures", "Secret Wonders"] },
+        { name: "Platinum", sets: ["Platinum", "Rising Rivals", "Supreme Victors"] },
+        { name: "HeartGold & SoulSilver", sets: ["HeartGold & SoulSilver", "Unleashed", "Undaunted"] },
+        { name: "Black & White", sets: ["Black & White", "Emerging Powers", "Noble Victories"] },
+        { name: "XY", sets: ["XY", "Flashfire", "Furious Fists", "Phantom Forces"] },
+        { name: "Sun & Moon", sets: ["Sun & Moon", "Guardians Rising", "Burning Shadows", "Crimson Invasion"] },
+        { name: "Sword & Shield", sets: ["Sword & Shield", "Rebel Clash", "Darkness Ablaze", "Vivid Voltage"] },
+        { name: "Scarlet & Violet", sets: ["Scarlet & Violet", "Paldea Evolved", "Obsidian Flames"] }
+      ] 
+    },
+    korean: { 
+      series: [
+        { name: "오리지널", sets: ["베이스 세트", "정글", "화석", "로켓단"] },
+        { name: "네오", sets: ["네오 제네시스", "네오 디스커버리", "네오 레벨레이션", "네오 데스티니"] },
+        { name: "e카드", sets: ["익스페디션 베이스 세트", "아쿠아 폴리스", "스카이 릿지"] },
+        { name: "XY", sets: ["XY", "와일드 블레이즈", "라이징 피스트", "팬텀 게이트"] },
+        { name: "썬 & 문", sets: ["썬 컬렉션", "문 컬렉션", "알로라의 햇빛", "알로라의 달빛"] },
+        { name: "소드 & 실드", sets: ["소드", "실드", "반역 크래시", "폭염 워커", "무한 존"] },
+        { name: "스칼렛 & 바이올렛", sets: ["스칼렛 ex", "바이올렛 ex", "트리플렛 비트", "스노 해저드"] }
+      ] 
+    }
+  },
+  sets_flat: ["Base Set", "Rebel Clash", "베이스 세트", "반역 크래시"]
+};
+
+// Quality Rating options
+const QUALITY_RATINGS = {
+  "PSA": [
+    "AA : AUTHENTIC ALTERED", "N0 : AUTHENTIC", "PSA 1 : POOR", "PSA 1.5 : FAIR", "PSA 2 : GOOD", 
+    "PSA 2.5 : GOOD +", "PSA 3 : VG", "PSA 3.5 : VG +", "PSA 4 : VG-EX", "PSA 4.5 : VG-EX +", 
+    "PSA 5 : EX", "PSA 5.5 : EX +", "PSA 6 : EX-MT", "PSA 6.5 : EX-MT +", "PSA 7 : NM", 
+    "PSA 7.5 : NM +", "PSA 8 : NM-MT", "PSA 8.5 : NM-MT +", "PSA 9 : MINT", "PSA 10 : GEM MINT"
+  ],
+  "BGS": [
+    "BGS 1 : POOR", "BGS 1.5 : FAIR", "BGS 2 : GOOD", "BGS 2.5 : GOOD +", "BGS 3 : VG", 
+    "BGS 3.5 : VG +", "BGS 4 : VG-EX", "BGS 4.5 : VG-EX +", "BGS 5 : EXCELLENT", "BGS 5.5 : EXCELLENT +", 
+    "BGS 6 : EX-MT", "BGS 6.5 : EX-MT +", "BGS 7 : NEAR MINT", "BGS 7.5 : NEAR MINT +", 
+    "BGS 8 : NM-MT", "BGS 8.5 : NM-MT", "BGS 9 : MINT", "BGS 9.5 : GEM MINT", "BGS 10 : PRISTINE", "BGS 10 : BLACK LABEL PRISTINE"
+  ],
+  "CGC": [
+    "CGC 0.5 : POOR", "CGC 1 : FAIR", "CGC 1.5 : FA-G", "CGC 1.8 : GOOD -", "CGC 2 : GOOD", 
+    "CGC 2.5 : GOOD +", "CGC 3 : G-VG", "CGC 3.5 : VG -", "CGC 4 : VG", "CGC 4.5 : VG +", 
+    "CGC 5 : VG-FN", "CGC 5.5 : FN -", "CGC 6 : FN", "CGC 6.5 : FN +", "CGC 7 : FN-VF", 
+    "CGC 7.5 : VF -", "CGC 8 : VF", "CGC 8.5 : VF +", "CGC 9 : VF-NM", "CGC 9.2 : NM -", 
+    "CGC 9.4 : NM", "CGC 9.6 : NM +", "CGC 9.8 : NM-MT", "CGC 9.9 : MINT", "CGC 10 : GEM MINT"
+  ],
+  "SGC": [
+    "SGC 1 : POOR", "SGC 1.5 : FAIR", "SGC 2 : GOOD", "SGC 2.5 : GOOD +", "SGC 3 : VG", 
+    "SGC 3.5 : VG +", "SGC 4 : VG-EX", "SGC 4.5 : VG-EX +", "SGC 5 : EX", "SGC 5.5 : EX +", 
+    "SGC 6 : EX-NM", "SGC 6.5 : EX-NM +", "SGC 7 : NM", "SGC 7.5 : NM +", "SGC 8 : NM-MT", 
+    "SGC 8.5 : NM-MT", "SGC 9 : MINT", "SGC 9.5 : MINT +", "SGC 10 GM : GEM MINT", "SGC 10 PR : PRISTINE"
+  ],
+  "HGA": [
+    "HGA 1.0 : POOR", "HGA 1.5 : FAIR", "HGA 2.0 : GOOD", "HGA 2.5 : GOOD +", "HGA 3.0 : VG", 
+    "HGA 3.5 : VG +", "HGA 4.0 : VG-EX", "HGA 4.5 : VG-EX +", "HGA 5.0 : EX", "HGA 5.5 : EX +", 
+    "HGA 6.0 : EX-NM", "HGA 6.5 : EX-NM +", "HGA 7.0 : NM", "HGA 7.5 : NM +", "HGA 8.0 : NM-MT", 
+    "HGA 8.5 : NM-MT +", "HGA 9 : MINT", "HGA 10 GM : GEM MT", "HGA 10 FL : FLAWLESS"
+  ]
+};
+
   // load catalog on demand (before form) to reduce wait
   useEffect(() => {
     const load = async () => {
@@ -217,11 +301,13 @@ export default function SellerPage({ openCardPreview }: Props) {
         setLoadingCatalog(true);
         setCatalogError(null);
         const res = await fetch(`${API_BASE}/catalog/pokemon`);
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as PokemonCatalog;
         setCatalog(data);
       } catch (e: any) {
-        setCatalogError(e?.message || "카탈로그를 불러오지 못했습니다.");
+        console.warn("Failed to load catalog from API, using static fallback:", e.message);
+        setCatalog(STATIC_CATALOG);
+        setCatalogError(null); // Clear error since we have fallback
       } finally {
         setLoadingCatalog(false);
       }
@@ -238,6 +324,7 @@ export default function SellerPage({ openCardPreview }: Props) {
     if (rarity) pokemonInfo.rarity = rarity;
     if (setName) pokemonInfo.set = setName;
     if (language) pokemonInfo.language = language as any;
+    if (qualityRating) pokemonInfo.quality_rating = qualityRating;
     pokemonInfo.game = "Pokemon TCG";
     if (!pokemonInfo.language) pokemonInfo.language = region === "korean" ? "ko" : "en";
     return {
@@ -251,7 +338,9 @@ export default function SellerPage({ openCardPreview }: Props) {
       uploadDate: new Date().toISOString(),
       pokemon: pokemonInfo,
     } as CardItem;
-  }, [photoUri, price, cardTitle, description, rarity, setName, language, region]);
+  }, [photoUri, price, cardTitle, description, rarity, setName, language, region, qualityRating]);
+
+  // no external auto-open; preview is shown inline as a full-screen modal when step === 'preview'
 
   const submit = async () => {
     setStep("submitting");
@@ -265,6 +354,7 @@ export default function SellerPage({ openCardPreview }: Props) {
         language: language || (region === "korean" ? "ko" : "en"),
         set: setName || undefined,
         card_num: undefined,
+        quality_rating: qualityRating || undefined,
         price: parseFloat(price) || 0,
         description: description?.trim() || undefined,
         uploadDate: new Date().toISOString(),
@@ -368,6 +458,21 @@ export default function SellerPage({ openCardPreview }: Props) {
     setPickerVisible(true);
   };
 
+  const handleCardPress = (card: any) => {
+    setSelectedCard(card);
+    setCardDetailVisible(true);
+  };
+
+  const handleCloseCardDetail = () => {
+    setCardDetailVisible(false);
+    setSelectedCard(null);
+  };
+
+  const handleCardUpdated = () => {
+    // Refresh the cards list when a card is updated
+    reloadSellerCards();
+  };
+
   const filteredOptions = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
     const base = pickerOptions;
@@ -413,21 +518,30 @@ export default function SellerPage({ openCardPreview }: Props) {
           <View style={styles.flex1}>
             <View style={styles.header}>
               <Text style={styles.title}>판매 중인 카드</Text>
-              <Pressable
-                style={styles.addBtn}
-                onPress={() => {
-                  resetForm();
-                  setStep("camera");
-                }}
-              >
-                <Text style={styles.addBtnText}>카드 판매</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.addBtn, { marginLeft: 8, backgroundColor: '#f93414' }]}
-                onPress={() => navigation.navigate('AdvertiseSetup' as any)}
-              >
-                <Text style={[styles.addBtnText, { color: '#fff' }]}>홍보하기</Text>
-              </Pressable>
+              <View style={styles.buttonGroup}>
+                {/* 홍보하기: temporarily disabled with overlay label */}
+                <View style={{ position: 'relative' }}>
+                  <Pressable
+                    style={[styles.addBtn, { backgroundColor: '#f93414', opacity: 0.7 }]}
+                    disabled
+                    onPress={() => { /* disabled: coming soon */ }}
+                  >
+                    <Text style={[styles.addBtnText, { color: '#fff' }]}>홍보하기</Text>
+                  </Pressable>
+                  <View style={styles.disabledOverlay} pointerEvents="none">
+                    <Text style={styles.disabledOverlayText}>베타-곧 제공됩니다</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.addBtn}
+                  onPress={() => {
+                    resetForm();
+                    setStep("camera");
+                  }}
+                >
+                  <Text style={styles.addBtnText}>카드 판매</Text>
+                </Pressable>
+              </View>
             </View>
             <FlatList
               data={sellerCards}
@@ -448,7 +562,7 @@ export default function SellerPage({ openCardPreview }: Props) {
                     description={(item.description && String(item.description).trim()) ||
                       ((item.set || item.card_num) ? `${item.set ?? ""}${item.card_num ? ` • ${item.card_num}` : ""}` : "정보 없음")}
                     price={priceNum}
-                    onPress={() => {}}
+                    onPress={() => handleCardPress(item)}
                   />
                 );
               }}
@@ -472,6 +586,14 @@ export default function SellerPage({ openCardPreview }: Props) {
 
       {step === "confirm-photo" && (
         <View style={[styles.flex1, styles.pad16]}>
+          <View style={styles.headerWithCancel}>
+            <Pressable style={styles.cancelBtn} onPress={() => {
+              resetForm();
+              setStep("management");
+            }}>
+              <Text style={styles.cancelBtnText}>취소</Text>
+            </Pressable>
+          </View>
           {photoUri ? (
             <View style={styles.previewWrap}>
               <Image source={{ uri: photoUri }} style={styles.previewImage} />
@@ -491,6 +613,14 @@ export default function SellerPage({ openCardPreview }: Props) {
       )}
       {step === "manual-input" && (
         <ScrollView style={styles.flex1} contentContainerStyle={styles.formContent}>
+          <View style={styles.headerWithCancel}>
+            <Pressable style={styles.cancelBtn} onPress={() => {
+              resetForm();
+              setStep("management");
+            }}>
+              <Text style={styles.cancelBtnText}>취소</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>상품명 (*)</Text>
           {/* Card Title at top */}
           <TextInput
@@ -548,6 +678,35 @@ export default function SellerPage({ openCardPreview }: Props) {
             <Text style={styles.selectBtnText}>{rarity || "레어리티 선택"}</Text>
           </Pressable>
 
+          {/* Quality Rating Scale */}
+          <Text style={[styles.stepTitle, { marginTop: 16 }]}>품질 등급 기관</Text>
+          <Pressable
+            style={[styles.selectBtn, qualityScale && styles.selectBtnSelected]}
+            onPress={() => openPicker("등급 기관 선택", Object.keys(QUALITY_RATINGS), (v) => { 
+              setQualityScale(v); 
+              setQualityRating(null); // Reset rating when scale changes
+              setPickerVisible(false); 
+            })}
+          >
+            <Text style={styles.selectBtnText}>{qualityScale || "등급 기관 선택 (PSA, BGS, CGC 등)"}</Text>
+          </Pressable>
+
+          {/* Quality Rating - only show if scale is selected */}
+          {qualityScale && (
+            <>
+              <Text style={[styles.stepTitle, { marginTop: 16 }]}>품질 등급</Text>
+              <Pressable
+                style={[styles.selectBtn, qualityRating && styles.selectBtnSelected]}
+                onPress={() => openPicker("품질 등급 선택", QUALITY_RATINGS[qualityScale as keyof typeof QUALITY_RATINGS] || [], (v) => { 
+                  setQualityRating(v); 
+                  setPickerVisible(false); 
+                })}
+              >
+                <Text style={styles.selectBtnText}>{qualityRating || "품질 등급 선택"}</Text>
+              </Pressable>
+            </>
+          )}
+
           {/* Description */}
           <Text style={[styles.stepTitle, { marginTop: 16 }]}>상세 설명 (*) (최대 500 단어)</Text>
           <TextInput
@@ -576,6 +735,14 @@ export default function SellerPage({ openCardPreview }: Props) {
 
       {step === "price-input" && (
         <View style={[styles.flex1, styles.pad16]}>
+          <View style={styles.headerWithCancel}>
+            <Pressable style={styles.cancelBtn} onPress={() => {
+              resetForm();
+              setStep("management");
+            }}>
+              <Text style={styles.cancelBtnText}>취소</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>판매 가격 설정</Text>
           <Text style={styles.helper}>카드의 판매 가격을 설정하세요 (원)</Text>
           
@@ -618,28 +785,83 @@ export default function SellerPage({ openCardPreview }: Props) {
         </View>
       )}
 
-      {step === "preview" && (
-        <View style={styles.formWrap}>
-          <Text style={styles.question}>미리보기</Text>
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => {
-              if (!cardForPreview) return;
-              openCardPreview?.(cardForPreview);
-            }}
-          >
-            <Text style={styles.primaryBtnText}>카드 상세 미리보기 열기</Text>
-          </Pressable>
-          <View style={styles.rowGap12}>
-            <Pressable style={styles.secondaryBtn} onPress={() => setStep("price-input")}>
-              <Text style={styles.secondaryBtnText}>이전</Text>
-            </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={submit}>
-              <Text style={styles.primaryBtnText}>업로드</Text>
-            </Pressable>
+      {/* Inline Preview modal for the preview step (matches CardDetailModal layout) */}
+      <Modal
+        visible={step === "preview"}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setStep("price-input")}
+      >
+        <View style={styles.previewOverlay}>
+          <Pressable style={styles.previewBackdrop} onPress={() => setStep("price-input")} accessibilityRole="button" />
+
+          <View style={styles.previewContainer}>
+            <ScrollView
+              contentContainerStyle={styles.previewScrollContent}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              {cardForPreview ? (
+                <>
+                  {/* Image area */}
+                  <View style={styles.previewImageWrap}>
+                    <Image
+                      source={{ uri: cardForPreview.imageUrl || "https://placehold.co/1000x600" }}
+                      style={styles.previewImageFull}
+                      resizeMode="cover"
+                    />
+                  </View>
+
+                  {/* Body matching screenshot */}
+                  <View style={styles.previewBody}>
+                    <Text style={styles.previewTitle}>{cardForPreview.title}</Text>
+                    {typeof cardForPreview.price === 'number' ? (
+                      <Text style={styles.previewPrice}>{`₩${Math.round(cardForPreview.price).toLocaleString()}`}</Text>
+                    ) : null}
+
+                    <Text style={styles.previewMetaText}>업로드한 유저: {user?.username || ""}</Text>
+                    <Text style={styles.previewMetaText}>업로드 날짜: {(() => {
+                      const d = cardForPreview?.uploadDate ? new Date(cardForPreview.uploadDate) : new Date();
+                      const yyyy = d.getFullYear();
+                      const mm = String(d.getMonth() + 1).padStart(2, '0');
+                      const dd = String(d.getDate()).padStart(2, '0');
+                      return `${yyyy}/${mm}/${dd}`;
+                    })()}</Text>
+
+                    <Text style={[styles.previewSectionTitle, { marginTop: 12 }]}>포켓몬 카드 정보</Text>
+
+                    <View style={styles.detailRow}><Text style={styles.detailLabel}>세트</Text><Text style={styles.detailValue}>{setName || ''}</Text></View>
+                    <View style={styles.detailRow}><Text style={styles.detailLabel}>희귀도</Text><Text style={styles.detailValue}>{rarity || ''}</Text></View>
+                    <View style={styles.detailRow}><Text style={styles.detailLabel}>언어</Text><Text style={styles.detailValue}>{(() => {
+                      const lang = language || (region === 'korean' ? 'ko' : region === 'english' ? 'en' : '');
+                      if (lang === 'Korean') return 'ko';
+                      if (lang === 'English') return 'en';
+                      return lang;
+                    })()}</Text></View>
+                    <View style={styles.detailRow}><Text style={styles.detailLabel}>품질 등급</Text><Text style={styles.detailValue}>{qualityRating || ''}</Text></View>
+                  </View>
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+
+          {/* Fixed bottom actions while previewing */}
+          <View style={[
+            styles.previewActionsBar,
+            { paddingBottom: Math.max(12, insets.bottom + 8) }
+          ]}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Pressable style={[styles.secondaryBtn, { flex: 1 }]} onPress={() => setStep("price-input")}>
+                <Text style={styles.secondaryBtnText}>이전</Text>
+              </Pressable>
+              <Pressable style={[styles.primaryBtn, { flex: 1 }]} onPress={submit}>
+                <Text style={styles.primaryBtnText}>업로드</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      )}
+      </Modal>
 
       {step === "submitting" && (
         <View style={styles.center}> 
@@ -671,6 +893,15 @@ export default function SellerPage({ openCardPreview }: Props) {
                 <>
                   <CameraView style={styles.camera} ref={cameraRef} facing="back" />
                   <CameraOverlay />
+                  {/* Cancel button in camera */}
+                  <View style={[styles.cameraCancel, { top: insets.top > 0 ? insets.top + 12 : 28 }]}>
+                    <Pressable style={styles.cameraCancelBtn} onPress={() => {
+                      resetForm();
+                      setStep("management");
+                    }}>
+                      <Text style={styles.cancelBtnText}>취소</Text>
+                    </Pressable>
+                  </View>
                   <View style={[
                     styles.cameraActions,
                     { bottom: insets.bottom > 0 ? insets.bottom + 12 : 28 }
@@ -715,6 +946,14 @@ export default function SellerPage({ openCardPreview }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* Seller Card Detail Modal */}
+      <SellerCardDetailModal
+        visible={cardDetailVisible}
+        onClose={handleCloseCardDetail}
+        card={selectedCard}
+        onCardUpdated={handleCardUpdated}
+      />
 
   {/** Modal is rendered at Home level via openCardPreview */}
     </View>
@@ -772,8 +1011,24 @@ const styles = StyleSheet.create({
   
   // New styles for management and form
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, paddingBottom: 8 },
+  buttonGroup: { flexDirection: "row", gap: 4 },
   addBtn: { backgroundColor: "#111827", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   addBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  disabledOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledOverlayText: {
+    color: '#000000',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   cardList: { flex: 1 },
   cardListContent: { padding: 16, gap: 12 },
   cardItem: { backgroundColor: "#F9FAFB", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E5E7EB" },
@@ -809,4 +1064,141 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
   tag: { backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   tagText: { fontSize: 11, color: "#374151", fontWeight: "600" },
+  
+  // Cancel button styles
+  headerWithCancel: { 
+    flexDirection: "row", 
+    justifyContent: "flex-start", 
+    alignItems: "center", 
+    paddingBottom: 16,
+    marginTop: 8
+  },
+  cameraCancel: {
+    position: "absolute",
+    left: 16,
+    zIndex: 10,
+  },
+  cancelBtn: { 
+    backgroundColor: "#E5E7EB", 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderRadius: 8 
+  },
+  cameraCancelBtn: {
+    backgroundColor: "rgba(229, 231, 235, 0.9)",
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderRadius: 8 
+  },
+  cancelBtnText: { 
+    color: "#374151", 
+    fontWeight: "600", 
+    fontSize: 14 
+  },
+  // Fixed bottom bar for preview actions (이전/업로드)
+  previewActionsBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: "#FAF9F6",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  // Preview modal (match CardDetailModal)
+  previewOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  previewBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  previewContainer: {
+    width: "100%",
+    backgroundColor: "#FAF9F6",
+    borderRadius: 18,
+    overflow: "hidden",
+    marginTop: 32,
+    marginBottom: 24,
+    maxHeight: "85%",
+  },
+  previewScrollContent: {
+    paddingBottom: 20,
+  },
+  previewCloseFloating: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 50,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  previewCloseFloatingText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  previewImageFull: {
+    width: "100%",
+    height: 600,
+    backgroundColor: "#f3f3f3",
+  },
+  previewImageWrap: {
+    position: "relative",
+  },
+  previewBody: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  previewTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  previewPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#007AFF",
+  },
+  previewSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 4,
+  },
+  previewDescription: {
+    fontSize: 16,
+    color: "#444",
+  },
+  // Meta + detail rows (for screenshot parity)
+  previewMetaText: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  detailLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111",
+  },
+  detailValue: {
+    fontSize: 16,
+    color: "#111",
+  },
 });

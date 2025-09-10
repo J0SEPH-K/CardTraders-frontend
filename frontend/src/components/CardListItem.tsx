@@ -127,6 +127,7 @@ export default function CardListItem({ id, imageUrl, title, description, price, 
 const styles = StyleSheet.create({
   container: {
     borderRadius: 16,
+    position: 'relative',
     // shadow for iOS (all around) and Android (elevation)
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 0 }, // center shadow so it drops evenly on all sides
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
     elevation: 6,
     marginVertical: 8,
     marginHorizontal: 16, // side margins so items don't touch screen edges
-  overflow: "visible", // ensure shadow visible
+    overflow: "visible", // ensure shadow visible
   },
   content: {
     flexDirection: "row",
@@ -159,8 +160,8 @@ const styles = StyleSheet.create({
   // star button floats at top-right
   starBtn: {
   position: 'absolute',
-  right: 10,
-    top: 8,
+    left: 10,
+    top: 10,
     zIndex: 10,
     backgroundColor: 'transparent',
   },

@@ -15,8 +15,8 @@ import CompleteProfilePage from "@/screens/completeProfilePage";
 import StartAnimationPage from "@/screens/startAnimationPage";
 import PaymentsPage from "@/screens/payments";
 import AddBankAccountPage from "@/screens/addBankAccountPage";
-import AdvertiseSetupPage from '../screens/AdvertiseSetupPage';
-import AdPaymentPage from '../screens/AdPaymentPage';
+import AdvertiseSetupPage from "@/screens/AdvertiseSetupPage";
+import AdPaymentPage from "@/screens/AdPaymentPage";
 const Stack = createNativeStackNavigator();
 export default function RootNav(){
   const user = useAuth((s)=>s.user);

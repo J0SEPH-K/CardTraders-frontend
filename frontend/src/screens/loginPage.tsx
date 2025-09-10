@@ -15,13 +15,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../store/useAuth";
-import { loginApi, loginWithGoogle } from "../api/client";
+import { loginApi, loginWithGoogle, acceptTermsAndConditions } from "../api/client";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
 import { useNavigation } from "@react-navigation/native";
 import { FontAwesome } from '@expo/vector-icons';
+import TermsAndConditionsModal from "../components/TermsAndConditionsModal";
 
 const ACCENT = "#f93414";
 // When true, social auth UI is visually disabled and not clickable (beta mode)
@@ -64,6 +65,8 @@ export default function LoginPage() {
 	const [passwordError, setPasswordError] = useState<string | null>(null);
 	const [authError, setAuthError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+	const [showTermsModal, setShowTermsModal] = useState(false);
+	const [pendingUser, setPendingUser] = useState<any>(null);
 
 	// Animations
 	const emailFocusAnim = useRef(new Animated.Value(0)).current;
@@ -88,6 +91,37 @@ export default function LoginPage() {
 			Animated.timing(errorShake, { toValue: 1, duration: 50, useNativeDriver: true, easing: Easing.linear }),
 			Animated.timing(errorShake, { toValue: 0, duration: 50, useNativeDriver: true, easing: Easing.linear }),
 		]).start();
+	};
+
+	const checkTermsAndSetUser = (user: any) => {
+		// Check if user has accepted terms and conditions
+		if (!user?.terms_and_conditions) {
+			// User hasn't accepted terms, show modal
+			setPendingUser(user);
+			setShowTermsModal(true);
+		} else {
+			// User has already accepted terms, proceed with login
+			setUser(user);
+		}
+	};
+
+	const handleAcceptTerms = async () => {
+		try {
+			if (!pendingUser?.userId) {
+				Alert.alert("오류", "사용자 정보를 찾을 수 없습니다.");
+				return;
+			}
+			const { user } = await acceptTermsAndConditions(pendingUser.userId);
+			setShowTermsModal(false);
+			setPendingUser(null);
+			setUser(user);
+		} catch (e: any) {
+			Alert.alert("오류", "약관 동의 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
+		}
+	};	const handleDeclineTerms = () => {
+		setShowTermsModal(false);
+		setPendingUser(null);
+		Alert.alert("알림", "약관에 동의하셔야 서비스를 이용하실 수 있습니다.");
 	};
 
 	const login = async () => {
@@ -120,7 +154,7 @@ export default function LoginPage() {
 				console.log("[DEBUG] User favorites from login:", user?.favorites);
 			}
 			
-			setUser(user);
+			checkTermsAndSetUser(user);
 		} catch (e: any) {
 			const msg = typeof e?.message === "string" ? e.message : "로그인에 실패했습니다.";
 			setAuthError(msg);
@@ -164,7 +198,7 @@ export default function LoginPage() {
 									(navigation as any).navigate("CompleteProfile", { idToken });
 									return;
 								}
-								setUser(user);
+								checkTermsAndSetUser(user);
 							} else {
 								if (typeof __DEV__ !== "undefined" && __DEV__) {
 									console.log("[GoogleAuth] prompt result", res);
@@ -321,6 +355,12 @@ export default function LoginPage() {
 					</View>
 				</View>
 			</ScrollView>
+			
+			<TermsAndConditionsModal
+				visible={showTermsModal}
+				onAccept={handleAcceptTerms}
+				onDecline={handleDeclineTerms}
+			/>
 		</KeyboardAvoidingView>
 	);
 }

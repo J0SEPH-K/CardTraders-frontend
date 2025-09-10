@@ -25,7 +25,8 @@ async function main() {
 
     // Prefer tunnels whose backend addr includes :8000
     const pick = httpsNgrok.find(x => String(x.t?.config?.addr || '').includes('8000')) || httpsNgrok[0];
-    const url = pick.url.toString();
+  // Normalize to no trailing slash
+  const url = pick.url.toString().replace(/\/+$/, '');
     const envPath = path.resolve(process.cwd(), '.env.development');
 
     // Read existing content if any and replace EXPO_PUBLIC_API line

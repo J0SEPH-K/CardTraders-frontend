@@ -17,6 +17,7 @@ type AnyCard = {
   language?: string;
   set?: string;
   card_num?: string | number;
+  quality_rating?: string;
   sports?: any;
   pokemon?: any;
   yugioh?: any;
@@ -184,9 +185,9 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                         disabled={!hasSeller}
                         style={[styles.messageButton, !hasSeller && styles.messageButtonDisabled]}
                         accessibilityRole="button"
-                        accessibilityLabel="message seller"
+                        accessibilityLabel="판매자에게 메시지"
                       >
-                        <Text style={styles.messageButtonText}>Message Seller</Text>
+                        <Text style={styles.messageButtonText}>판매자에게 메시지</Text>
                       </Pressable>
                     </View>
                   );
@@ -244,6 +245,19 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                       <Row label="등급" value={displayedCard.sports.grade} />
                       <Row label="인증 번호" value={displayedCard.sports.certificationNumber} />
                       <Row label="감정 기관" value={displayedCard.sports.professionalGrader} />
+                      <Row label="품질 등급" value={displayedCard.sports.quality_rating} />
+                    </View>
+                  ) : null}
+
+                  {/* Sports metadata (uploadedCards top-level fallback) */}
+                  {displayedCard.category === "sports" && !displayedCard.sports ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>스포츠 카드 정보</Text>
+                      <Row label="세트" value={displayedCard.set} />
+                      <Row label="카드번호" value={displayedCard.card_num} />
+                      <Row label="희귀도" value={displayedCard.rarity} />
+                      <Row label="언어" value={displayedCard.language} />
+                      <Row label="품질 등급" value={displayedCard.quality_rating} />
                     </View>
                   ) : null}
 
@@ -276,6 +290,7 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                           : displayedCard.pokemon.variants}
                       />
                       <Row label="그레이딩" value={displayedCard.pokemon.grading} />
+                      <Row label="품질 등급" value={displayedCard.pokemon.quality_rating} />
                     </View>
                   ) : null}
 
@@ -287,6 +302,7 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                       <Row label="카드번호" value={displayedCard.card_num} />
                       <Row label="희귀도" value={displayedCard.rarity} />
                       <Row label="언어" value={displayedCard.language} />
+                      <Row label="품질 등급" value={displayedCard.quality_rating} />
                     </View>
                   ) : null}
 
@@ -323,6 +339,7 @@ export default function CardDetailModal({ visible, onClose, card, showUploadDate
                       <Row label="카드 번호" value={displayedCard.card_num} />
                       <Row label="희귀도" value={displayedCard.rarity} />
                       <Row label="언어" value={displayedCard.language} />
+                      <Row label="품질 등급" value={displayedCard.quality_rating} />
                     </View>
                   ) : null}
                 </View>

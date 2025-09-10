@@ -2,7 +2,51 @@ import React, { useState } from "react";
 import { View, FlatList, StyleSheet, Text, Pressable } from "react-native";
 import AnalyticsCardListItem from "../components/AnalyticsCardListItem";
 import SearchBar from "../components/SearchBar";
-import { CATEGORIES, cards } from "../data/dummy";
+
+const CATEGORIES = [
+	{ key: "all", label: "전체" },
+	{ key: "pokemon", label: "포켓몬" },
+	{ key: "yugioh", label: "유희왕" },
+	{ key: "sports", label: "스포츠" },
+];
+
+const analyticsItems = [
+	{
+		id: "a1",
+		imageUrl: "https://placehold.co/100x130",
+		title: "블랙 로터스",
+		data: Array.from({ length: 30 }, (_, i) => 1000 + Math.round(Math.sin(i / 3) * 50 + i * 2)),
+		category: "yugioh",
+	},
+	{
+		id: "a2",
+		imageUrl: "https://placehold.co/100x130",
+		title: "청룡의 기사",
+		data: Array.from({ length: 30 }, (_, i) => 800 + Math.round(Math.cos(i / 4) * 30 + i)),
+		category: "yugioh",
+	},
+	{
+		id: "a3",
+		imageUrl: "https://placehold.co/100x130",
+		title: "피카츄 - 시장 동향",
+		data: Array.from({ length: 30 }, (_, i) => 600 + Math.round(Math.sin(i / 5) * 20 + i * 0.5)),
+		category: "pokemon",
+	},
+	{
+		id: "a4",
+		imageUrl: "https://placehold.co/100x130",
+		title: "야구 카드 - 시장 동향",
+		data: Array.from({ length: 30 }, (_, i) => 1200 + Math.round(Math.cos(i / 6) * 40 - i)),
+		category: "sports",
+	},
+	{
+		id: "a5",
+		imageUrl: "https://placehold.co/100x130",
+		title: "다크 매지션",
+		data: Array.from({ length: 30 }, (_, i) => 420 + Math.round(Math.sin(i / 2) * 25 + i)),
+		category: "yugioh",
+	},
+];
 
 export default function AnalyticsPage() {
 	const [query, setQuery] = useState("");
@@ -16,7 +60,7 @@ export default function AnalyticsPage() {
 		setSelectedCategory((prev) => (prev === key ? "all" : key));
 	};
 
-		const displayed = cards.filter((it) => {
+	const displayed = analyticsItems.filter((it) => {
 		const matchesCategory = selectedCategory === "all" || it.category === selectedCategory;
 		const q = query.trim().toLowerCase();
 		const matchesQuery = q === "" || it.title.toLowerCase().includes(q);
@@ -25,7 +69,7 @@ export default function AnalyticsPage() {
 
 	return (
 		<View style={styles.container}>
-			<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="Search analytics" />
+			<SearchBar value={query} onChangeText={setQuery} onSearch={handleSearch} placeholder="분석 검색" />
 
 			<View style={styles.filterRow}>
 				{CATEGORIES.map((cat) => {
@@ -51,6 +95,11 @@ export default function AnalyticsPage() {
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}
 			/>
+
+			{/* Beta overlay to disable the page */}
+			<View style={styles.overlay} pointerEvents="auto">
+				<Text style={styles.overlayText}>베타-곧 제공됩니다</Text>
+			</View>
 		</View>
 	);
 }
@@ -58,7 +107,8 @@ export default function AnalyticsPage() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: "#FAF9F6",
+		backgroundColor: "#fff",
+		position: 'relative',
 	},
 	filterRow: {
 		flexDirection: "row",
@@ -86,5 +136,22 @@ const styles = StyleSheet.create({
 	},
 	filterLabelActive: {
 		color: "#fff",
+	},
+	overlay: {
+		position: 'absolute',
+		left: 0,
+		right: 0,
+		top: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(255,255,255,0.8)',
+		alignItems: 'center',
+		justifyContent: 'center',
+		zIndex: 10,
+	},
+	overlayText: {
+		color: '#000',
+		fontSize: 16,
+		fontWeight: '700',
+		textAlign: 'center',
 	},
 });
